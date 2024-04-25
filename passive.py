@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 This experiment was created using PsychoPy3 Experiment Builder (v2023.2.3),
-    on Thu Apr 25 12:49:05 2024
+    on Thu Apr 25 14:17:21 2024
 If you publish work using this script the most relevant publication is:
 
     Peirce J, Gray JR, Simpson S, MacAskill M, Höchenberger R, Sogo H, Kastman E, Lindeløv JK. (2019) 
@@ -339,12 +339,12 @@ def run(expInfo, thisExp, win, inputs, globalClock=None, thisSession=None):
     pupil_duration = int(expInfo['test_duration'])
     range_time = int(expInfo['range_duration'])
     
-    sound_dict = {}
-    for sf in sound_files:
-        sound_path = os.path.join('sounds', f"{sf}.wav")
-        sound_stimuli = sound.Sound(sound_path, secs=-1, stereo=-1, hamming=True, 
-        volume=-1, name=sf)
-        sound_dict[sf] = sound_stimuli
+    #sound_dict = {}
+    #for sf in sound_files:
+    #    sound_path = os.path.join('sounds', f"{sf}.wav")
+    #    sound_stimuli = sound.Sound(sound_path, secs=-1, stereo=-1, hamming=True, 
+    #    volume=-1, name=sf)
+    #    sound_dict[sf] = sound_stimuli
     
     sound_files = sound_files * repeat
     n_trials = len(sound_files)
@@ -400,13 +400,16 @@ def run(expInfo, thisExp, win, inputs, globalClock=None, thisSession=None):
         opacity=None, depth=-1.0, interpolate=True)
     
     # --- Initialize components for Routine "stim" ---
+    current_sound = sound.Sound('A', secs=-1, stereo=True, hamming=True,
+        name='current_sound')
+    current_sound.setVolume(1.0)
     text_3 = visual.TextStim(win=win, name='text_3',
         text='',
         font='Open Sans',
         pos=(0, 0), height=0.05, wrapWidth=None, ori=0.0, 
         color='white', colorSpace='rgb', opacity=None, 
         languageStyle='LTR',
-        depth=-1.0);
+        depth=-2.0);
     
     # --- Initialize components for Routine "post_stim" ---
     cross_2 = visual.ShapeStim(
@@ -546,9 +549,9 @@ def run(expInfo, thisExp, win, inputs, globalClock=None, thisSession=None):
     # --- Prepare to start Routine "black" ---
     continueRoutine = True
     # update component parameters for each repeat
+    thisExp.addData('black.started', globalClock.getTime())
     # Run 'Begin Routine' code from code_black
     marker_outlet.push_sample(["range-black"])
-    thisExp.addData('black.started', globalClock.getTime())
     # keep track of which components have finished
     blackComponents = [black_screen_2]
     for thisComponent in blackComponents:
@@ -763,8 +766,7 @@ def run(expInfo, thisExp, win, inputs, globalClock=None, thisSession=None):
         # Run 'Begin Routine' code from code
         name = sound_files[sound_idx]
         marker_outlet.push_sample([f"pre-stim-{name}"])
-        current_sound = sound_dict[name]
-        sound_duration = current_sound.getDuration()
+        sound_path = os.path.join('sounds', f"{name}.wav")
         # keep track of which components have finished
         pre_stimComponents = [cross]
         for thisComponent in pre_stimComponents:
@@ -860,9 +862,14 @@ def run(expInfo, thisExp, win, inputs, globalClock=None, thisSession=None):
         thisExp.addData('stim.started', globalClock.getTime())
         # Run 'Begin Routine' code from pupil_code
         marker_outlet.push_sample([f"stim-{name}"])
+        sound_duration = current_sound.getDuration()
+        print(f'{name}: {sound_duration}')
+        current_sound.setSound(sound_path, hamming=True)
+        current_sound.setVolume(1.0, log=False)
+        current_sound.seek(0)
         text_3.setText(name)
         # keep track of which components have finished
-        stimComponents = [text_3]
+        stimComponents = [current_sound, text_3]
         for thisComponent in stimComponents:
             thisComponent.tStart = None
             thisComponent.tStop = None
@@ -884,23 +891,23 @@ def run(expInfo, thisExp, win, inputs, globalClock=None, thisSession=None):
             tThisFlipGlobal = win.getFutureFlipTime(clock=None)
             frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
             # update/draw components on each frame
-            # Run 'Each Frame' code from pupil_code
-            if current_sound.status == NOT_STARTED and tThisFlip >= 0-frameTolerance:
+            
+            # if current_sound is starting this frame...
+            if current_sound.status == NOT_STARTED and tThisFlip >= 0.0-frameTolerance:
                 # keep track of start time/frame for later
                 current_sound.frameNStart = frameN  # exact frame index
                 current_sound.tStart = t  # local t and not account for scr refresh
                 current_sound.tStartRefresh = tThisFlipGlobal  # on global time
                 # add timestamp to datafile
-                thisExp.addData(f'{name}.started', tThisFlipGlobal)
+                thisExp.addData('current_sound.started', tThisFlipGlobal)
                 # update status
                 current_sound.status = STARTED
                 current_sound.play(when=win)  # sync with win flip
-            # update sound_stimuli status according to whether it's playing
+            # update current_sound status according to whether it's playing
             if current_sound.isPlaying:
                 current_sound.status = STARTED
             elif current_sound.isFinished:
                 current_sound.status = FINISHED
-                thisExp.addData(f'{name}.started', tThisFlipGlobal)
             
             # *text_3* updates
             
@@ -963,9 +970,9 @@ def run(expInfo, thisExp, win, inputs, globalClock=None, thisSession=None):
         thisExp.addData('stim.stopped', globalClock.getTime())
         # Run 'End Routine' code from pupil_code
         marker_outlet.push_sample([f"poststim-{name}"])
-        current_sound.pause()
         post_duration = pupil_duration - sound_duration
         
+        current_sound.pause()  # ensure sound has stopped at end of Routine
         # the Routine "stim" was not non-slip safe, so reset the non-slip timer
         routineTimer.reset()
         
