@@ -15,7 +15,7 @@
 > ``` ffmpeg -i <input_file>.h264 -c copy <output_file>.mp4 ```
 > - Splitting a video file by times:
 > ``` ffmpeg -i <input_file>.h264 -ss <start_time> -to <end_time> -c:v libx264 -preset fast -crf 18 ```
-    >>>>> `-crf` flag ensures the quality (0-51, 0 - lossless, 23 - default, 51 - worst) 
+>> - `-crf` flag ensures the quality (0-51, 0 - lossless, 23 - default, 51 - worst) 
 
 
 ### Raspberry Pi 
