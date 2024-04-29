@@ -28,7 +28,7 @@
 - Once the experiment is finished the video is saved to `final.h264` file. Move this to the `input` folder for further analysis.
 
 ### PsychoPy
-- TODO
+- [Sound Latency](https://psychopy.org/api/sound/playback.html)
   
 ### Lab Recorder 
 - TODO 
