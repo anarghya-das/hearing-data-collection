@@ -22,6 +22,8 @@
 
 - Create a virtual environment with `--system-site-packages` flag
 - Activate the virtual environment
+- Install [pylsl](https://github.com/chkothe/pylsl/tree/master)
+  - [Examples](https://github.com/chkothe/pylsl/tree/master/examples)
 - Install [picamera2](https://github.com/raspberrypi/picamera2)
   - Follow the installation instructions under the `Installation using pip` section
 - Copy and run the `pi-recorder.py` script to the raspberry pi 
