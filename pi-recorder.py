@@ -5,6 +5,7 @@ from picamera2 import MappedArray, Picamera2
 from picamera2.encoders import H264Encoder
 from pylsl import StreamInfo, StreamOutlet
 import uuid
+from datetime import datetime
 
 colour = (0, 255, 0)
 origin = (0, 30)
@@ -14,7 +15,8 @@ thickness = 2
 
 
 def apply_timestamp(request):
-    timestamp = time.strftime("%Y-%m-%d %X")
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S.%f")
     with MappedArray(request, "main") as m:
         cv2.putText(m.array, timestamp, origin, font, scale, colour, thickness)
 
