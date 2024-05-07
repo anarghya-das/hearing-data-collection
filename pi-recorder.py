@@ -18,7 +18,8 @@ def apply_timestamp(request):
     now = datetime.now()
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S.%f")
     with MappedArray(request, "main") as m:
-        cv2.putText(m.array, timestamp, origin, font, scale, colour, thickness)
+        gray = cv2.cvtColor(m.array, cv2.COLOR_BGR2GRAY)
+        cv2.putText(gray, timestamp, origin, font, scale, colour, thickness)
 
 
 info = StreamInfo(name="VideoFrameStream", type='videostream',
