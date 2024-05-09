@@ -2,7 +2,7 @@ from picamera2 import Picamera2
 import time
 import cv2
 from picamera2 import MappedArray, Picamera2
-from picamera2.encoders import H264Encoder
+from picamera2.encoders import H264Encoder, JpegEncoder, Quality
 from pylsl import StreamInfo, StreamOutlet
 import uuid
 from datetime import datetime
@@ -18,8 +18,7 @@ def apply_timestamp(request):
     now = datetime.now()
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S.%f")
     with MappedArray(request, "main") as m:
-        gray = cv2.cvtColor(m.array, cv2.COLOR_BGR2GRAY)
-        cv2.putText(gray, timestamp, origin, font, scale, colour, thickness)
+        cv2.putText(m.array, timestamp, origin, font, scale, colour, thickness)
 
 
 info = StreamInfo(name="VideoFrameStream", type='videostream',
@@ -31,13 +30,11 @@ camera_config = picam2.create_video_configuration(main={"size": (1920, 1080)})
 picam2.configure(camera_config)
 picam2.pre_callback = apply_timestamp
 
-encoder = H264Encoder()  # Adjust bitrate as needed
-picam2.start_encoder(encoder, "final.h264")
-
+encoder = JpegEncoder(colour_subsampling='Gray')  # Adjust bitrate as needed
+picam2.start_recording(encoder, "final.mjpeg", quality=Quality.HIGH)
 frameCounter = 1
-
-picam2.start()
 print('Recording started...')
+
 
 try:
     while True:
@@ -47,8 +44,7 @@ try:
 except KeyboardInterrupt:
     print("Interrupted by user")
 finally:
-    picam2.stop()
-    picam2.stop_encoder()
+    picam2.stop_recording()
     picam2.close()
     print('Saved output video to:', "final.h264")
 
