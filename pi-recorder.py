@@ -104,10 +104,10 @@ def handle_client(client_socket, timestamp_func):
             print("Received 'stop' message")
             if thread_started:
                 q.put(None)
-                camera_thread.join()
             break
 
     client_socket.close()
+    camera_thread.join()
 
 
 if __name__ == "__main__":
