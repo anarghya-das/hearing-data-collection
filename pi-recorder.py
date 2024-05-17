@@ -8,31 +8,28 @@ from datetime import datetime
 from threading import Thread
 import socket
 import queue
-
-
-def get_ip_address():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        # Connect to a non-routable IP address
-        s.connect(('10.254.254.254', 1))
-        IP = s.getsockname()[0]
-    except Exception:
-        IP = '127.0.0.1'
-    finally:
-        s.close()
-    return IP
+import time
 
 
 def apply_timestamp(request):
-    colour = (0, 255, 0)
+    colour = (0, 0, 0)  # Black color for the text
     origin = (0, 30)
     font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = 1
-    thickness = 2
+    scale = 0.5  # Reduced size of the text
+    thickness = 1  # Reduced thickness
     now = datetime.now()
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+
     with MappedArray(request, "main") as m:
-        cv2.putText(m.array, timestamp, origin, font, scale, colour, thickness)
+        # Convert the BGR image to grayscale directly
+        gray_image = cv2.cvtColor(m.array, cv2.COLOR_BGR2GRAY)
+        # Add the timestamp directly to the grayscale image
+        cv2.putText(gray_image, timestamp, origin,
+                    font, scale, colour, thickness)
+        # Copy the modified grayscale image back to the original array as a 3-channel grayscale image
+        m.array[:, :, 0] = gray_image
+        m.array[:, :, 1] = gray_image
+        m.array[:, :, 2] = gray_image
 
 
 def create_stream():
@@ -43,9 +40,12 @@ def create_stream():
 
 
 def create_camera(callback):
+    frame_rate = 60
+    frame_val = int(1000000/frame_rate)
+    print(f"Frame rate val: {frame_val}")
     picam2 = Picamera2()
-    camera_config = picam2.create_video_configuration(
-        main={"size": (1920, 1080)})
+    camera_config = picam2.create_video_configuration(main={"size": (
+        640, 480), "format": "BGR888"}, controls={"FrameDurationLimits": (frame_val, frame_val)})
     picam2.configure(camera_config)
     picam2.pre_callback = callback
     return picam2
@@ -72,9 +72,11 @@ def start_recording(q, timestamp_func):
 
     frameCounter = 0
     started = start_camera(camera)
+    # frame_rate = 60
 
     while True:
         try:
+            # time.sleep(1 / frame_rate)
             message = q.get(block=False)
             if message is None:
                 if started:
@@ -111,18 +113,15 @@ def handle_client(client_socket, timestamp_func):
 
 
 if __name__ == "__main__":
-    ip_addr = get_ip_address()
-    print(f"IP address of Pi: {ip_addr}")
-
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    server_socket.bind(('0.0.0.0', 65432))
+    server_socket.bind(("", 65432))  # binds it to the hostname pi1
     server_socket.listen()
-    print(f"Waiting for experiment to start...")
 
     try:
         while True:
+            print(f"Waiting for experiment to start...")
             client_socket, address = server_socket.accept()
             print(f"Connection from {address} has been established!")
             handle_client(client_socket, apply_timestamp)
