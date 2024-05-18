@@ -5,12 +5,17 @@
 ### FFMPEG 
 
 - Make sure [FFMPEG](https://ffmpeg.org/) is installed on both Raspberry Pi and the recording computer
+
+### GStreamer
+
+- Install [GStreamer](https://gstreamer.freedesktop.org/download/) to stream video from Raspberry Pi to the recording computer
+- For Windows, make sure to select complete installation (not typical) when installing
   
 > Useful Commands
-> - Streaming from Pi: 
-> ``` libcamera-vid -t 0 --inline --listen -o tcp://<ip_address>:<port> --width 800 --height 450 --framerate 30 ```
-> - Capturing from the computer: 
-> ``` ffplay tcp://<ip_address>:<port> -fflags nobuffer -flags low_delay -framedrop ```
+> - Streaming from Pi (update with hostname or ip-address of the computer): 
+> ``` python stream.py ```
+> - Capturing from the computer (Replace <port_num> with actual port number): 
+> ``` gst-launch-1.0 -v udpsrc port=<port_num> caps="application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264" ! rtpjitterbuffer ! rtph264depay ! avdec_h264 ! videoconvert ! fpsdisplaysink video-sink=autovideosink ```
 > - Converting .h264 to .mp4:
 > ``` ffmpeg -i <input_file>.h264 -c copy <output_file>.mp4 ```
 > - Converting .mjpeg to .mp4:
@@ -28,14 +33,14 @@
   - [Examples](https://github.com/chkothe/pylsl/tree/master/examples)
 - Install [picamera2](https://github.com/raspberrypi/picamera2)
   - Follow the installation instructions under the `Installation using pip` section
-- Copy and run the `pi-recorder.py` script to the raspberry pi 
-- Once the experiment is finished the video is saved to `final.h264` file. Move this to the `input` folder for further analysis.
+- Copy and run the `server-camera.py` script on the Raspberry Pi 
+- Once the experiment is finished the video is saved to the `recordings` folder with the current date and time. Access this folder using a file manager and move the file to the `input` folder for further analysis.
 
 ### PsychoPy
 - [Sound Latency](https://psychopy.org/api/sound/playback.html)
   
 ### Lab Recorder 
-- TODO 
+- [Installation](https://github.com/labstreaminglayer/App-LabRecorder)
   
 ## Steps
 
@@ -45,6 +50,6 @@
 
 ## Data Processing 
 
-- Move the raw video from raspberry pi to the `input` folder
+- Move the raw video (.mp4) from Raspberry Pi to the `input` folder
 - Move the experiment data file (ends with `.xdf`) to the `exp_data` folder
 - The processing script will load and segment the data based on the markers. It will then save the segmented video files and create an output folder
