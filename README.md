@@ -9,7 +9,7 @@ Experiment and configuration files for PsychoPy incorporating the Lab Streaming 
 ## Repository Structure
 
 ### Experiment Configurations
-- `config.yaml` file contains the various configurations for accommodating different modalities in the experiment
+- `config.yaml` file contains the various configurations for accommodating different modalities in the experiment and handling the timings for various routines in the experiment.
 - It currently supports three configurations: `eeg`, `fnirs`, `test`
 - Each of the configurations has the following attributes:
 
