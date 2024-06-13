@@ -2,4 +2,5 @@ pylsl==1.16.2
 numpy==1.26.4
 pyxdf==1.16.5
 tqdm==4.66.2
-picamera2==0.3.18
+# picamera2==0.3.18
+PyYAML==6.0.1

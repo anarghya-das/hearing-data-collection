@@ -1,0 +1,22 @@
+task: "hearing"
+eeg:
+  sound_files: ["babycry", "chewing", "engine", "seawave", "typing"]
+  baseline_duration: 15
+  stimuli_repeat: 5
+  stimulus_dration: 4
+  response_duration: 5
+  rest_range: [6, 8]
+fnirs:
+  sound_files: ["babycry", "chewing", "engine", "seawave", "typing"]
+  baseline_duration: 30
+  stimuli_repeat: 3
+  stimulus_dration: 4
+  response_duration: 6
+  rest_range: [8, 12]
+test:
+  sound_files: ["babycry", "seawave"]
+  baseline_duration: 1
+  stimuli_repeat: 1
+  stimulus_dration: 4
+  response_duration: 1
+  rest_range: [1, 1]
