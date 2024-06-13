@@ -1,6 +1,26 @@
 # Hearing Study Data Collection Setup
 
-## System Setup 
+Insert Overview
+
+## Pre-Requisites 
+- Setup the Recording Environment by following [this guide](https://docs.google.com/document/d/1NA2v7Z6gLFAqDksrsyBf3V2RNZ6RxAdAVVEvcNDk-yA/edit?usp=sharing)
+- Read through the [data collection protocol](https://docs.google.com/document/d/1ouoUjMdvXaoEwp-7u0hbgPy1gG8JQRklimvL0BNJeHc/edit?usp=sharing) for this experiment
+
+## Repository Structure
+
+## Experiment Configurations
+
+### PsychoPy Experiment Files
+
+- `hearing.pyexp`: Experiment file for the fNIRS/EEG modality experiments
+- `passive.pyexp`: Experiment file for pupil dilation and fNIRS/EEG modality experiments
+  
+### Video Recording
+- Folders `exp_data` 
+
+
+<details>
+  <summary>Raspberry Pi Related Setup</summary>
 
 ### FFMPEG 
 
@@ -34,18 +54,10 @@
 - Install [picamera2](https://github.com/raspberrypi/picamera2)
   - Follow the installation instructions under the `Installation using pip` section
 - Copy and run the `server-camera.py` script on the Raspberry Pi 
-- Once the experiment is finished the video is saved to the `recordings` folder with the current date and time. Access this folder using a file manager and move the file to the `input` folder for further analysis.
+- After the experiment, the video will be saved to the `recordings` folder with the current date and time. Access this folder using a file manager and move the file to the `input` folder for further analysis.
 
-### PsychoPy
-- [Sound Latency](https://psychopy.org/api/sound/playback.html)
-  
-### Lab Recorder 
-- [Installation](https://github.com/labstreaminglayer/App-LabRecorder)
-  
 ## Steps
 
-- Run Lab Recorder
-- Run PsychoPy, open `passive.psyexp` file
 - Run the `pi-recorder.py` script on the raspberry pi
 
 ## Data Processing 
@@ -53,3 +65,5 @@
 - Move the raw video (.mp4) from Raspberry Pi to the `input` folder
 - Move the experiment data file (ends with `.xdf`) to the `exp_data` folder
 - The processing script will load and segment the data based on the markers. It will then save the segmented video files and create an output folder
+
+</details>
