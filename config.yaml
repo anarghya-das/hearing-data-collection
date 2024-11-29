@@ -15,8 +15,8 @@ fnirs:
   rest_range: [8, 12]
 test:
   sound_files: ["babycry", "seawave"]
-  baseline_duration: 1
+  baseline_duration: 5
   stimuli_repeat: 1
   stimulus_dration: 4
-  response_duration: 1
-  rest_range: [1, 1]
+  response_duration: 2
+  rest_range: [2, 3]

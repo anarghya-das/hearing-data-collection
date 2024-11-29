@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" ?>
-<PsychoPy2experiment encoding="utf-8" version="2024.1.5">
+<PsychoPy2experiment encoding="utf-8" version="2024.2.4">
   <Settings>
     <Param val="3" valType="str" updates="None" name="Audio latency priority"/>
     <Param val="ptb" valType="str" updates="None" name="Audio lib"/>
@@ -21,12 +21,12 @@
     <Param val="True" valType="bool" updates="None" name="Save log file"/>
     <Param val="True" valType="bool" updates="None" name="Save psydat file"/>
     <Param val="True" valType="bool" updates="None" name="Save wide csv file"/>
-    <Param val="1" valType="num" updates="None" name="Screen"/>
+    <Param val="2" valType="num" updates="None" name="Screen"/>
     <Param val="True" valType="bool" updates="None" name="Show info dlg"/>
     <Param val="False" valType="bool" updates="None" name="Show mouse"/>
     <Param val="height" valType="str" updates="None" name="Units"/>
     <Param val="" valType="str" updates="None" name="Use version"/>
-    <Param val="[1920, 1080]" valType="list" updates="None" name="Window size (pixels)"/>
+    <Param val="[1536, 864]" valType="list" updates="None" name="Window size (pixels)"/>
     <Param val="none" valType="str" updates="None" name="backgroundFit"/>
     <Param val="" valType="str" updates="None" name="backgroundImg"/>
     <Param val="avg" valType="str" updates="None" name="blendMode"/>
@@ -34,6 +34,8 @@
     <Param val="{'thisRow.t': 'priority.CRITICAL', 'expName': 'priority.LOW'}" valType="dict" updates="None" name="colPriority"/>
     <Param val="-1.0000, -1.0000, -1.0000" valType="color" updates="None" name="color"/>
     <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+    <Param val="warning" valType="code" updates="None" name="consoleLoggingLevel"/>
+    <Param val="default" valType="str" updates="None" name="ecSampleRate"/>
     <Param val="100.1.1.1" valType="str" updates="None" name="elAddress"/>
     <Param val="FILTER_LEVEL_2" valType="str" updates="None" name="elDataFiltering"/>
     <Param val="FILTER_LEVEL_OFF" valType="str" updates="None" name="elLiveFiltering"/>
@@ -88,6 +90,7 @@
         <Param val="" valType="str" updates="constant" name="desc"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
         <Param val="welcome" valType="code" updates="None" name="name"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="constant" name="skipIf"/>
@@ -96,16 +99,16 @@
         <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
       </RoutineSettingsComponent>
       <CodeComponent name="code_init" plugin="None">
-        <Param val="import os&amp;#10;import random&amp;#10;from pylsl import StreamInfo, StreamOutlet&amp;#10;import socket&amp;#10;from psychopy import sound&amp;#10;import yaml&amp;#10;import platform&amp;#10;import cv2&amp;#10;import threading&amp;#10;from datetime import datetime&amp;#10;&amp;#10;current_path = os.getcwd()&amp;#10;print(&quot;Current path:&quot;, current_path)&amp;#10;&amp;#10;def video_recording(cap,out,lsl_out,stop_event=None):&amp;#10;    print(&quot;Video Started&quot;)&amp;#10;    while cap.isOpened():&amp;#10;        ret, frame = cap.read()&amp;#10;        if ret:&amp;#10;            # Get the current timestamp&amp;#10;            now = datetime.now()&amp;#10;            timestamp = now.strftime(&quot;%Y-%m-%d %H:%M:%S.%f&quot;)&amp;#10;            lsl_out.push_sample([timestamp])&amp;#10;            # Define the text properties&amp;#10;            colour = (0, 255, 0)  # Green color for the text&amp;#10;            origin = (10, 30)  # Top left corner&amp;#10;            font = cv2.FONT_HERSHEY_SIMPLEX&amp;#10;            scale = 1&amp;#10;            thickness = 2&amp;#10;            # Add the timestamp to the frame&amp;#10;            cv2.putText(frame, timestamp, origin, font, scale, colour, thickness)&amp;#10;&amp;#10;            # Write the frame to the output file&amp;#10;            out.write(frame)&amp;#10;&amp;#10;            if stop_event and stop_event.is_set():&amp;#10;                print('Stopping Video')&amp;#10;                break&amp;#10;                &amp;#10;        else:&amp;#10;            break&amp;#10;    &amp;#10;    cap.release()&amp;#10;    out.release()&amp;#10;&amp;#10;backend = None&amp;#10;if platform.system() == 'Windows':&amp;#10;    backend = cv2.CAP_DSHOW&amp;#10;# Open a connection to the camera (0 is usually the built-in camera, change if you have multiple cameras)&amp;#10;cap = cv2.VideoCapture(0, backend)&amp;#10;fps = cap.get(cv2.CAP_PROP_FPS)&amp;#10;frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))&amp;#10;frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))&amp;#10;fourcc = cv2.VideoWriter_fourcc(*'mp4v')&amp;#10;out = cv2.VideoWriter('/Users/anarghya/Developer/research/hearing-experiment/output.mp4', fourcc, fps, (frame_width, frame_height))&amp;#10;&amp;#10;marker_info = StreamInfo('HearingMarkerStream', 'Markers',&amp;#10;                         1, 0, 'string', 'hearingid2023')&amp;#10;video_info = StreamInfo(name=&quot;VideoTimeStream&quot;, type='videostream', nominal_srate=fps,&amp;#10;                      channel_format='string', channel_count=1, source_id='usb-vid')&amp;#10;config_file = open('config.yaml')&amp;#10;yaml_config = yaml.safe_load(config_file)&amp;#10;marker_outlet = StreamOutlet(marker_info)&amp;#10;video_outlet = StreamOutlet(video_info)&amp;#10;&amp;#10;stop_video = threading.Event()&amp;#10;video_thread = threading.Thread(target=video_recording, args=(cap, out, video_outlet, stop_video))&amp;#10;video_thread.start()&amp;#10;&amp;#10;started_recording = False&amp;#10;lsl_socket = socket.create_connection((&quot;localhost&quot;, 22345))" valType="extendedCode" updates="constant" name="Before Experiment"/>
+        <Param val="import os&amp;#10;import random&amp;#10;from pylsl import StreamInfo, StreamOutlet&amp;#10;import socket&amp;#10;from psychopy import sound&amp;#10;import yaml&amp;#10;import platform&amp;#10;&amp;#10;marker_info = StreamInfo('HearingMarkerStream', 'Markers',&amp;#10;                         1, 0, 'string', 'hearingid2023')&amp;#10;&amp;#10;config_file = open('config.yaml')&amp;#10;yaml_config = yaml.safe_load(config_file)&amp;#10;marker_outlet = StreamOutlet(marker_info)&amp;#10;&amp;#10;started_recording = False&amp;#10;lsl_socket = socket.create_connection((&quot;localhost&quot;, 22345))" valType="extendedCode" updates="constant" name="Before Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Before JS Experiment"/>
         <Param val="config_type = expInfo['config']&amp;#10;exp_config = yaml_config[config_type]&amp;#10;&amp;#10;sound_files = exp_config['sound_files']&amp;#10;baseline_duration = exp_config['baseline_duration']&amp;#10;stimuli_repeat = exp_config['stimuli_repeat']&amp;#10;stimulus_dration = exp_config['stimulus_dration']&amp;#10;response_duration = exp_config['response_duration']&amp;#10;rest_range = exp_config['rest_range']&amp;#10;&amp;#10;&amp;#10;#sound_dict = {}&amp;#10;#for sf in sound_files:&amp;#10;#    sound_path = os.path.join('sounds', f&quot;{sf}.wav&quot;)&amp;#10;#    sound_stimuli = sound.Sound(sound_path, secs=-1, stereo=-1, hamming=True, &amp;#10;#    volume=-1, name=sf)&amp;#10;#    sound_dict[sf] = sound_stimuli&amp;#10;&amp;#10;sound_files = sound_files * stimuli_repeat&amp;#10;n_trials = len(sound_files)&amp;#10;random.shuffle(sound_files)&amp;#10;sound_idx = 0&amp;#10;&amp;#10;&amp;#10;participant_id = expInfo['participant']&amp;#10;run = expInfo['run']&amp;#10;task = yaml_config['task']&amp;#10;&amp;#10;if lsl_socket is not None:&amp;#10;    started_recording = True&amp;#10;    config_str = f'filename {{template:sub-%p/sub-%p_task-%b_run-%n.xdf}} {{run:{run}}} {{participant:{participant_id}}} {{task:{task}}}\n'&amp;#10;    print(config_str)&amp;#10;&amp;#10;    lsl_socket.sendall(b&quot;update\n&quot;)&amp;#10;    lsl_socket.sendall(b&quot;select all\n&quot;)&amp;#10;    lsl_socket.sendall(config_str.encode('utf-8'))&amp;#10;    lsl_socket.sendall(b&quot;start\n&quot;)&amp;#10;    &amp;#10;" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
-        <Param val="keys = event.getKeys()&amp;#10;if 'escape' in keys and started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    stop_video.set()&amp;#10;    video_thread.join()&amp;#10;    started_recording = False" valType="extendedCode" updates="constant" name="Each Frame"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
-        <Param val="if started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    stop_video.set()&amp;#10;    video_thread.join()&amp;#10;    started_recording = False&amp;#10;" valType="extendedCode" updates="constant" name="End Experiment"/>
+        <Param val="print(&quot;sending end&quot;)&amp;#10;marker_outlet.push_sample([&quot;end&quot;])&amp;#10;if started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    started_recording = False&amp;#10;" valType="extendedCode" updates="constant" name="End Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Routine"/>
         <Param val="" valType="extendedCode" updates="constant" name="End Routine"/>
@@ -117,6 +120,7 @@
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Open Sans" valType="str" updates="constant" name="font"/>
@@ -168,6 +172,7 @@
         <Param val="" valType="str" updates="constant" name="desc"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
         <Param val="rest" valType="code" updates="None" name="name"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="constant" name="skipIf"/>
@@ -183,7 +188,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
         <Param val="marker_outlet.push_sample([&quot;rest&quot;])&amp;#10;rest_duration = random.randint(rest_range[0],rest_range[1])&amp;#10;if sound_idx &lt; len(sound_files)-1:&amp;#10;    sound_idx+=1&amp;#10;else:&amp;#10;    sound_idx = 0" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
-        <Param val="keys = event.getKeys()&amp;#10;if 'escape' in keys and started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    stop_video.set()&amp;#10;    video_thread.join()&amp;#10;    started_recording = False" valType="extendedCode" updates="constant" name="Each Frame"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="End Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Experiment"/>
@@ -197,6 +202,7 @@
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
         <Param val="white" valType="color" updates="constant" name="fillColor"/>
         <Param val="linear" valType="str" updates="constant" name="interpolate"/>
@@ -230,6 +236,7 @@
         <Param val="" valType="str" updates="constant" name="desc"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
         <Param val="pre_stim" valType="code" updates="None" name="name"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="constant" name="skipIf"/>
@@ -259,6 +266,7 @@
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
         <Param val="white" valType="color" updates="constant" name="fillColor"/>
         <Param val="linear" valType="str" updates="constant" name="interpolate"/>
@@ -292,6 +300,7 @@
         <Param val="" valType="str" updates="constant" name="desc"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
         <Param val="stim" valType="code" updates="None" name="name"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="constant" name="skipIf"/>
@@ -307,12 +316,12 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
         <Param val="name = sound_files[sound_idx]&amp;#10;sound_path = os.path.join('sounds', f&quot;{name}.wav&quot;)&amp;#10;current_sound.setSound(sound_path, hamming=True)&amp;#10;marker_outlet.push_sample([f&quot;stim-{name}&quot;])&amp;#10;sound_duration = current_sound.getDuration()&amp;#10;print(f'{name}: {sound_duration}')" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
-        <Param val="keys = event.getKeys()&amp;#10;if 'escape' in keys and started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;#    stop_video.set()&amp;#10;#    video_thread.join()&amp;#10;    started_recording = False" valType="extendedCode" updates="constant" name="Each Frame"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="End Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Routine"/>
-        <Param val="marker_outlet.push_sample([f&quot;poststim-{name}&quot;])&amp;#10;" valType="extendedCode" updates="constant" name="End Routine"/>
+        <Param val="" valType="extendedCode" updates="constant" name="End Routine"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="pupil_code" valType="code" updates="None" name="name"/>
       </CodeComponent>
@@ -339,6 +348,7 @@
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Open Sans" valType="str" updates="constant" name="font"/>
@@ -370,6 +380,7 @@
         <Param val="" valType="str" updates="constant" name="desc"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
         <Param val="post_stim" valType="code" updates="None" name="name"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="constant" name="skipIf"/>
@@ -385,7 +396,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
         <Param val="marker_outlet.push_sample([f&quot;response-{name}&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
-        <Param val="keys = event.getKeys()&amp;#10;if 'escape' in keys and started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    stop_video.set()&amp;#10;    video_thread.join()&amp;#10;    started_recording = False" valType="extendedCode" updates="constant" name="Each Frame"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="keys = event.getKeys()&amp;#10;if 'escape' in keys and started_recording:&amp;#10;    s.sendall(b&quot;stop\n&quot;)&amp;#10;    started_recording = False" valType="extendedCode" updates="constant" name="Each JS Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="End Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Experiment"/>
@@ -399,6 +410,7 @@
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Open Sans" valType="str" updates="constant" name="font"/>
@@ -430,6 +442,7 @@
         <Param val="" valType="str" updates="constant" name="desc"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
         <Param val="baseline" valType="code" updates="None" name="name"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="constant" name="skipIf"/>
@@ -443,9 +456,9 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="marker_outlet.push_sample([f&quot;baseline&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="print(&quot;sending baseline&quot;)&amp;#10;marker_outlet.push_sample([&quot;baseline&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
-        <Param val="keys = event.getKeys()&amp;#10;if 'escape' in keys and started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    stop_video.set()&amp;#10;    video_thread.join()&amp;#10;    started_recording = False" valType="extendedCode" updates="constant" name="Each Frame"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="End Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Experiment"/>
@@ -459,6 +472,7 @@
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
         <Param val="white" valType="color" updates="constant" name="fillColor"/>
         <Param val="linear" valType="str" updates="constant" name="interpolate"/>
@@ -492,6 +506,7 @@
         <Param val="" valType="str" updates="constant" name="desc"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
         <Param val="end" valType="code" updates="None" name="name"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="constant" name="skipIf"/>
@@ -505,7 +520,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="marker_outlet.push_sample([&quot;end&quot;])&amp;#10;if started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    stop_video.set()&amp;#10;    video_thread.join()&amp;#10;    started_recording = False&amp;#10;" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="print(&quot;sending end&quot;)&amp;#10;marker_outlet.push_sample([&quot;end&quot;])&amp;#10;if started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    started_recording = False&amp;#10;" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -517,10 +532,74 @@
         <Param val="code_2" valType="code" updates="None" name="name"/>
       </CodeComponent>
     </Routine>
+    <Routine name="base">
+      <RoutineSettingsComponent name="base" plugin="None">
+        <Param val="none" valType="str" updates="None" name="backgroundFit"/>
+        <Param val="" valType="str" updates="None" name="backgroundImg"/>
+        <Param val="$[0,0,0]" valType="color" updates="None" name="color"/>
+        <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+        <Param val="" valType="str" updates="constant" name="desc"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
+        <Param val="base" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="constant" name="skipIf"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
+      </RoutineSettingsComponent>
+      <CodeComponent name="code_3" plugin="None">
+        <Param val="" valType="extendedCode" updates="constant" name="Before Experiment"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Before JS Experiment"/>
+        <Param val="print(&quot;sending baseline&quot;)&amp;#10;marker_outlet.push_sample([&quot;baseline&quot;])" valType="extendedCode" updates="constant" name="Begin Experiment"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="Py" valType="str" updates="None" name="Code Type"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
+        <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
+        <Param val="" valType="extendedCode" updates="constant" name="End Experiment"/>
+        <Param val="" valType="extendedCode" updates="constant" name="End JS Experiment"/>
+        <Param val="" valType="extendedCode" updates="constant" name="End JS Routine"/>
+        <Param val="" valType="extendedCode" updates="constant" name="End Routine"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="code_3" valType="code" updates="None" name="name"/>
+      </CodeComponent>
+      <PolygonComponent name="polygon" plugin="None">
+        <Param val="center" valType="str" updates="constant" name="anchor"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="white" valType="color" updates="constant" name="fillColor"/>
+        <Param val="linear" valType="str" updates="constant" name="interpolate"/>
+        <Param val="white" valType="color" updates="constant" name="lineColor"/>
+        <Param val="1" valType="num" updates="constant" name="lineWidth"/>
+        <Param val="4" valType="int" updates="constant" name="nVertices"/>
+        <Param val="polygon" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="triangle" valType="str" updates="None" name="shape"/>
+        <Param val="(0.5, 0.5)" valType="list" updates="constant" name="size"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="$baseline_duration" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="list" updates="constant" name="vertices"/>
+      </PolygonComponent>
+    </Routine>
   </Routines>
   <Flow>
     <Routine name="welcome"/>
-    <Routine name="baseline"/>
+    <Routine name="base"/>
     <LoopInitiator loopType="TrialHandler" name="trials">
       <Param name="Selected rows" updates="None" val="" valType="str"/>
       <Param name="conditions" updates="None" val="None" valType="str"/>
@@ -536,6 +615,5 @@
     <Routine name="post_stim"/>
     <Routine name="rest"/>
     <LoopTerminator name="trials"/>
-    <Routine name="end"/>
   </Flow>
 </PsychoPy2experiment>
