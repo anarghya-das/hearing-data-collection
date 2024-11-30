@@ -2,7 +2,7 @@ import cv2
 import signal
 import sys
 import platform
-from multiprocessing import Process, Event
+import threading
 from pylsl import StreamInfo, StreamOutlet
 from datetime import datetime
 
@@ -18,7 +18,7 @@ class VideoRecorder:
         self.out = None
         self.video_outlet = None
         self.default_fps = default_fps
-        self.stop_event = Event()
+        self.stop_event = threading.Event()
         print("VideoRecorder initialized successfully.")
 
     def signal_handler(self, sig, frame):
@@ -85,18 +85,17 @@ class VideoRecorder:
 
 if __name__ == "__main__":
     recorder = VideoRecorder(
-        cam_id=1, output_path='video.avi', display_video=False, enable_lsl=True)
+        cam_id=1, output_path='video.avi', display_video=True, enable_lsl=True)
     signal.signal(signal.SIGINT, recorder.signal_handler)
     signal.signal(signal.SIGTERM, recorder.signal_handler)
 
     # Create and start a process to run the record_video method
-    recording_process = Process(target=recorder.record_video)
+    recording_process = threading.Thread(target=recorder.record_video)
     recording_process.start()
-
     # Example of stopping the recorder after 10 seconds
     try:
         import time
-        time.sleep(5)
+        time.sleep(500)
         recorder.stop()
         # recording_process.join(timeout=10)
     except KeyboardInterrupt:
