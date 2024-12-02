@@ -99,16 +99,16 @@
         <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
       </RoutineSettingsComponent>
       <CodeComponent name="code_init" plugin="None">
-        <Param val="import os&amp;#10;import random&amp;#10;from pylsl import StreamInfo, StreamOutlet&amp;#10;import socket&amp;#10;from psychopy import sound, core&amp;#10;import yaml&amp;#10;import cv2&amp;#10;import signal&amp;#10;import sys&amp;#10;import threading&amp;#10;from datetime import datetime&amp;#10;import platform&amp;#10;import threading&amp;#10;import serial&amp;#10;import csv&amp;#10;import random&amp;#10;import time&amp;#10;&amp;#10;marker_info = StreamInfo('HearingMarkerStream', 'Markers',&amp;#10;                         1, 0, 'string', 'hearingid2023')&amp;#10;&amp;#10;config_file = open('config.yaml')&amp;#10;yaml_config = yaml.safe_load(config_file)&amp;#10;marker_outlet = StreamOutlet(marker_info)&amp;#10;&amp;#10;class VideoRecorder:&amp;#10;    def __init__(self, cam_id=0, output_path='output.avi', default_fps=30, display_video=False, enable_lsl=False):&amp;#10;        print(&quot;VideoRecorder start.&quot;)&amp;#10;        self.cam_id = cam_id&amp;#10;        self.output_path = output_path&amp;#10;        self.display_video = display_video&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.cap = None&amp;#10;        self.out = None&amp;#10;        self.video_outlet = None&amp;#10;        self.default_fps = default_fps&amp;#10;        self.stop_event = threading.Event()&amp;#10;        print(&quot;VideoRecorder initialized successfully.&quot;)&amp;#10;&amp;#10;    def signal_handler(self, sig, frame):&amp;#10;        print('Termination signal received. Releasing resources...')&amp;#10;        self.stop()&amp;#10;        sys.exit(0)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.cap:&amp;#10;            self.cap.release()&amp;#10;        if self.out:&amp;#10;            self.out.release()&amp;#10;        cv2.destroyAllWindows()&amp;#10;&amp;#10;    def record_video(self):&amp;#10;        backend = cv2.CAP_DSHOW if platform.system() == 'Windows' else None&amp;#10;        self.cap = cv2.VideoCapture(self.cam_id, backend)&amp;#10;&amp;#10;        fps = self.cap.get(cv2.CAP_PROP_FPS) or self.default_fps&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('VideoStream', 'Video', 1, fps,&amp;#10;                              'float32', 'videouid34234')&amp;#10;            self.video_outlet = StreamOutlet(info)&amp;#10;&amp;#10;        fourcc = cv2.VideoWriter_fourcc(*'XVID')&amp;#10;        frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))&amp;#10;        frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))&amp;#10;        self.out = cv2.VideoWriter(&amp;#10;            self.output_path, fourcc, fps, (frame_width, frame_height))&amp;#10;&amp;#10;        frame_number = 0&amp;#10;        try:&amp;#10;            while self.cap.isOpened() and not self.stop_event.is_set():&amp;#10;                ret, frame = self.cap.read()&amp;#10;                if ret:&amp;#10;                    now = datetime.now()&amp;#10;                    timestamp = now.strftime(&quot;%Y-%m-%d %H:%M:%S.%f&quot;)&amp;#10;                    if self.video_outlet:&amp;#10;                        self.video_outlet.push_sample([frame_number])&amp;#10;&amp;#10;                    colour = (0, 255, 0)&amp;#10;                    origin = (10, 30)&amp;#10;                    font = cv2.FONT_HERSHEY_SIMPLEX&amp;#10;                    scale = 1&amp;#10;                    thickness = 2&amp;#10;&amp;#10;                    cv2.putText(frame, timestamp, origin,&amp;#10;                                font, scale, colour, thickness)&amp;#10;                    self.out.write(frame)&amp;#10;                    frame_number += 1&amp;#10;                    if self.display_video:&amp;#10;                        cv2.imshow('frame', frame)&amp;#10;&amp;#10;                    if cv2.waitKey(1) &amp; 0xFF == ord('q'):&amp;#10;                        break&amp;#10;                else:&amp;#10;                    break&amp;#10;        finally:&amp;#10;            self.release_resources()&amp;#10;&amp;#10;class PPGRecorder:&amp;#10;    def __init__(self, port, baud_rate=9600, enable_lsl=True, simulate_data=False):&amp;#10;        self.port = port&amp;#10;        self.baud_rate = baud_rate&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.simulate_data = simulate_data&amp;#10;        self.ser = None&amp;#10;        self.stop_event = threading.Event()&amp;#10;        self.sample_rate = 50&amp;#10;&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('PPGStream', 'PPG', 1, self.sample_rate,&amp;#10;                              'float32', 'ppguid34234')&amp;#10;            self.ppg_outlet = StreamOutlet(info)&amp;#10;&amp;#10;    def start(self):&amp;#10;        if self.simulate_data:&amp;#10;            self.simulate_ppg_data()&amp;#10;        else:&amp;#10;            try:&amp;#10;                self.ser = serial.Serial(self.port, self.baud_rate, timeout=1)&amp;#10;                time.sleep(2)  # Wait for the connection to be established&amp;#10;                print(f&quot;Successfully connected to {self.port}&quot;)&amp;#10;&amp;#10;                self.record_ppg()&amp;#10;            except serial.SerialException as e:&amp;#10;                print(f&quot;Serial error: {e}&quot;)&amp;#10;            except Exception as e:&amp;#10;                print(f&quot;An error occurred: {e}&quot;)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def record_ppg(self):&amp;#10;        with open('pulse_data.csv', 'w', newline='') as csvfile:&amp;#10;            csvwriter = csv.writer(csvfile)&amp;#10;            csvwriter.writerow(['Datetime', 'Timestamp', 'Signal'])&amp;#10;&amp;#10;            print(&quot;Logging data. Press 'q' to stop.&quot;)&amp;#10;            while not self.stop_event.is_set():&amp;#10;                signal = self.read_signal()&amp;#10;                if signal:&amp;#10;                    timestamp = time.time()&amp;#10;                    datetime_str = datetime.fromtimestamp(&amp;#10;                        timestamp).strftime('%Y-%m-%d %H:%M:%S.%f')&amp;#10;                    csvwriter.writerow([datetime_str, timestamp, signal])&amp;#10;&amp;#10;                    if self.enable_lsl:&amp;#10;                        self.ppg_outlet.push_sample([float(signal)])&amp;#10;                else:&amp;#10;                    print(&quot;No signal received.&quot;)&amp;#10;&amp;#10;    def read_signal(self):&amp;#10;        try:&amp;#10;            signal = self.ser.readline().decode('utf-8').strip()&amp;#10;            return signal&amp;#10;        except Exception as e:&amp;#10;            print(f&quot;Error reading signal: {e}&quot;)&amp;#10;            return None&amp;#10;&amp;#10;    def simulate_ppg_data(self):&amp;#10;        print(&quot;Simulating PPG data. Press 'q' to stop.&quot;)&amp;#10;        while not self.stop_event.is_set():&amp;#10;            signal = random.uniform(0.0, 1.0)  # Simulate a random PPG signal&amp;#10;&amp;#10;            if self.enable_lsl:&amp;#10;                self.ppg_outlet.push_sample([signal])&amp;#10;&amp;#10;            time.sleep(0.02)  # Simulate a 50 Hz signal&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.ser and self.ser.is_open:&amp;#10;            self.ser.close()&amp;#10;            print(f&quot;Closed connection to {self.port}&quot;)&amp;#10;&amp;#10;&amp;#10;print(&quot;creating videorecorder&quot;)&amp;#10;recorder = VideoRecorder(cam_id=1, output_path='video.avi', display_video=False, enable_lsl=True)&amp;#10;recording_thread = threading.Thread(target=recorder.record_video)&amp;#10;recording_thread.start()&amp;#10;&amp;#10;&amp;#10;ppg_recorder = PPGRecorder(port=&quot;COM5&quot;, enable_lsl=True, simulate_data=True)&amp;#10;ppg_thread = threading.Thread(target=ppg_recorder.start)&amp;#10;ppg_thread.start()&amp;#10;&amp;#10;started_recording = False&amp;#10;lsl_socket = socket.create_connection((&quot;localhost&quot;, 22345))&amp;#10;" valType="extendedCode" updates="constant" name="Before Experiment"/>
+        <Param val="import os&amp;#10;import random&amp;#10;from pylsl import StreamInfo, StreamOutlet&amp;#10;import socket&amp;#10;from psychopy import sound, core&amp;#10;import yaml&amp;#10;import cv2&amp;#10;import signal&amp;#10;import sys&amp;#10;import threading&amp;#10;from datetime import datetime&amp;#10;import platform&amp;#10;import threading&amp;#10;import serial&amp;#10;import csv&amp;#10;import random&amp;#10;import time&amp;#10;import atexit&amp;#10;&amp;#10;started_recording = False&amp;#10;original_quit = core.quit&amp;#10;lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread = None, None, None, None, None&amp;#10;&amp;#10;def cleanup():&amp;#10;    global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread&amp;#10;    print(&quot;At exit...&quot;)&amp;#10;    if started_recording:&amp;#10;        print(&quot;Performing cleanup tasks...&quot;)&amp;#10;        lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;        try:&amp;#10;            lsl_socket.shutdown(socket.SHUT_RDWR)&amp;#10;        except OSError:&amp;#10;            pass  # Ignore errors if the socket is already closed&amp;#10;        lsl_socket.close()&amp;#10;        recorder.stop()&amp;#10;        ppg_recorder.stop()&amp;#10;        recording_thread.join()&amp;#10;        ppg_thread.join()&amp;#10;        started_recording = False&amp;#10;&amp;#10;def custom_quit():&amp;#10;    cleanup()  # Your cleanup function&amp;#10;    original_quit()&amp;#10;&amp;#10;class VideoRecorder:&amp;#10;    def __init__(self, cam_id=0, output_name='output', default_fps=30, display_video=False, enable_lsl=False):&amp;#10;        print(&quot;VideoRecorder start.&quot;)&amp;#10;        self.cam_id = cam_id&amp;#10;        self.output_path = os.path.join(os.getcwd(),&quot;input&quot;, f&quot;{output_name}.avi&quot;)&amp;#10;        self.display_video = display_video&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.cap = None&amp;#10;        self.out = None&amp;#10;        self.video_outlet = None&amp;#10;        self.default_fps = default_fps&amp;#10;        self.stop_event = threading.Event()&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('VideoStream', 'Video', 1, self.default_fps,&amp;#10;                              'float32', 'videouid34234')&amp;#10;            self.video_outlet = StreamOutlet(info)&amp;#10;        print(&quot;VideoRecorder initialized successfully.&quot;)&amp;#10;&amp;#10;    def signal_handler(self, sig, frame):&amp;#10;        print('Termination signal received. Releasing resources...')&amp;#10;        self.stop()&amp;#10;        sys.exit(0)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.cap:&amp;#10;            self.cap.release()&amp;#10;        if self.out:&amp;#10;            self.out.release()&amp;#10;        cv2.destroyAllWindows()&amp;#10;&amp;#10;    def record_video(self):&amp;#10;        backend = cv2.CAP_DSHOW if platform.system() == 'Windows' else None&amp;#10;        self.cap = cv2.VideoCapture(self.cam_id, backend)&amp;#10;        fourcc = cv2.VideoWriter_fourcc(*'XVID')&amp;#10;        frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))&amp;#10;        frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))&amp;#10;        self.out = cv2.VideoWriter(&amp;#10;            self.output_path, fourcc, self.default_fps, (frame_width, frame_height))&amp;#10;&amp;#10;        frame_number = 0&amp;#10;        try:&amp;#10;            while self.cap.isOpened() and not self.stop_event.is_set():&amp;#10;                ret, frame = self.cap.read()&amp;#10;                if ret:&amp;#10;                    now = datetime.now()&amp;#10;                    timestamp = now.strftime(&quot;%Y-%m-%d %H:%M:%S.%f&quot;)&amp;#10;                    if self.video_outlet:&amp;#10;                        self.video_outlet.push_sample([frame_number])&amp;#10;&amp;#10;                    colour = (0, 255, 0)&amp;#10;                    origin = (10, 30)&amp;#10;                    font = cv2.FONT_HERSHEY_SIMPLEX&amp;#10;                    scale = 1&amp;#10;                    thickness = 2&amp;#10;&amp;#10;                    cv2.putText(frame, timestamp, origin,&amp;#10;                                font, scale, colour, thickness)&amp;#10;                    self.out.write(frame)&amp;#10;                    frame_number += 1&amp;#10;                    if self.display_video:&amp;#10;                        cv2.imshow('frame', frame)&amp;#10;&amp;#10;                    if cv2.waitKey(1) &amp; 0xFF == ord('q'):&amp;#10;                        break&amp;#10;                else:&amp;#10;                    break&amp;#10;        finally:&amp;#10;            self.release_resources()&amp;#10;&amp;#10;class PPGRecorder:&amp;#10;    def __init__(self, port, baud_rate=9600, enable_lsl=True, simulate_data=False):&amp;#10;        self.port = port&amp;#10;        self.baud_rate = baud_rate&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.simulate_data = simulate_data&amp;#10;        self.ser = None&amp;#10;        self.stop_event = threading.Event()&amp;#10;        self.sample_rate = 50&amp;#10;&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('PPGStream', 'PPG', 1, self.sample_rate,&amp;#10;                              'float32', 'ppguid34234')&amp;#10;            self.ppg_outlet = StreamOutlet(info)&amp;#10;&amp;#10;    def start(self):&amp;#10;        if self.simulate_data:&amp;#10;            self.simulate_ppg_data()&amp;#10;        else:&amp;#10;            try:&amp;#10;                self.ser = serial.Serial(self.port, self.baud_rate, timeout=1)&amp;#10;                time.sleep(2)  # Wait for the connection to be established&amp;#10;                print(f&quot;Successfully connected to {self.port}&quot;)&amp;#10;&amp;#10;                self.record_ppg()&amp;#10;            except serial.SerialException as e:&amp;#10;                print(f&quot;Serial error: {e}&quot;)&amp;#10;            except Exception as e:&amp;#10;                print(f&quot;An error occurred: {e}&quot;)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def record_ppg(self):&amp;#10;        with open('pulse_data.csv', 'w', newline='') as csvfile:&amp;#10;            csvwriter = csv.writer(csvfile)&amp;#10;            csvwriter.writerow(['Datetime', 'Timestamp', 'Signal'])&amp;#10;&amp;#10;            print(&quot;Logging data. Press 'q' to stop.&quot;)&amp;#10;            while not self.stop_event.is_set():&amp;#10;                signal = self.read_signal()&amp;#10;                if signal:&amp;#10;                    timestamp = time.time()&amp;#10;                    datetime_str = datetime.fromtimestamp(&amp;#10;                        timestamp).strftime('%Y-%m-%d %H:%M:%S.%f')&amp;#10;                    csvwriter.writerow([datetime_str, timestamp, signal])&amp;#10;&amp;#10;                    if self.enable_lsl:&amp;#10;                        self.ppg_outlet.push_sample([float(signal)])&amp;#10;                else:&amp;#10;                    print(&quot;No signal received.&quot;)&amp;#10;&amp;#10;    def read_signal(self):&amp;#10;        try:&amp;#10;            signal = self.ser.readline().decode('utf-8').strip()&amp;#10;            return signal&amp;#10;        except Exception as e:&amp;#10;            print(f&quot;Error reading signal: {e}&quot;)&amp;#10;            return None&amp;#10;&amp;#10;    def simulate_ppg_data(self):&amp;#10;        print(&quot;Simulating PPG data. Press 'q' to stop.&quot;)&amp;#10;        while not self.stop_event.is_set():&amp;#10;            signal = random.uniform(0.0, 1.0)  # Simulate a random PPG signal&amp;#10;&amp;#10;            if self.enable_lsl:&amp;#10;                self.ppg_outlet.push_sample([signal])&amp;#10;&amp;#10;            time.sleep(0.02)  # Simulate a 50 Hz signal&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.ser and self.ser.is_open:&amp;#10;            self.ser.close()&amp;#10;            print(f&quot;Closed connection to {self.port}&quot;)&amp;#10;&amp;#10;core.quit = custom_quit&amp;#10;atexit.register(cleanup)&amp;#10;marker_info = StreamInfo('HearingMarkerStream', 'Markers',&amp;#10;                         1, 0, 'string', 'hearingid2023')&amp;#10;&amp;#10;config_file = open('config.yaml')&amp;#10;yaml_config = yaml.safe_load(config_file)&amp;#10;marker_outlet = StreamOutlet(marker_info)&amp;#10;" valType="extendedCode" updates="constant" name="Before Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Before JS Experiment"/>
-        <Param val="config_type = expInfo['config']&amp;#10;exp_config = yaml_config[config_type]&amp;#10;&amp;#10;sound_files = exp_config['sound_files']&amp;#10;baseline_duration = exp_config['baseline_duration']&amp;#10;stimuli_repeat = exp_config['stimuli_repeat']&amp;#10;stimulus_dration = exp_config['stimulus_dration']&amp;#10;response_duration = exp_config['response_duration']&amp;#10;rest_range = exp_config['rest_range']&amp;#10;root_dir = os.path.join(os.getcwd(),&quot;exp_data&quot;) &amp;#10;&amp;#10;#sound_dict = {}&amp;#10;#for sf in sound_files:&amp;#10;#    sound_path = os.path.join('sounds', f&quot;{sf}.wav&quot;)&amp;#10;#    sound_stimuli = sound.Sound(sound_path, secs=-1, stereo=-1, hamming=True, &amp;#10;#    volume=-1, name=sf)&amp;#10;#    sound_dict[sf] = sound_stimuli&amp;#10;&amp;#10;sound_files = sound_files * stimuli_repeat&amp;#10;n_trials = len(sound_files)&amp;#10;random.shuffle(sound_files)&amp;#10;sound_idx = 0&amp;#10;&amp;#10;&amp;#10;participant_id = expInfo['participant']&amp;#10;run = expInfo['run']&amp;#10;task = yaml_config['task']&amp;#10;&amp;#10;if lsl_socket is not None:&amp;#10;    started_recording = True&amp;#10;    template_str = os.path.join(&quot;sub-%p&quot;,&quot;sub-%p_task-%b_run-%n.xdf&quot;)&amp;#10;    config_str = f'filename {{root:{root_dir}}} {{template:{template_str}}} {{run:{run}}} {{participant:{participant_id}}} {{task:{task}}}\n'&amp;#10;    print(config_str)&amp;#10;&amp;#10;    lsl_socket.sendall(b&quot;update\n&quot;)&amp;#10;    lsl_socket.sendall(b&quot;select all\n&quot;)&amp;#10;    lsl_socket.sendall(config_str.encode('utf-8'))&amp;#10;    lsl_socket.sendall(b&quot;start\n&quot;)&amp;#10;   &amp;#10;    core.wait(5)&amp;#10;" valType="extendedCode" updates="constant" name="Begin Experiment"/>
+        <Param val="config_type = expInfo['config']&amp;#10;exp_config = yaml_config[config_type]&amp;#10;&amp;#10;sound_files = exp_config['sound_files']&amp;#10;baseline_duration = exp_config['baseline_duration']&amp;#10;stimuli_repeat = exp_config['stimuli_repeat']&amp;#10;stimulus_dration = exp_config['stimulus_dration']&amp;#10;response_duration = exp_config['response_duration']&amp;#10;rest_range = exp_config['rest_range']&amp;#10;root_dir = os.path.join(os.getcwd(),&quot;exp_data&quot;) &amp;#10;&amp;#10;#sound_dict = {}&amp;#10;#for sf in sound_files:&amp;#10;#    sound_path = os.path.join('sounds', f&quot;{sf}.wav&quot;)&amp;#10;#    sound_stimuli = sound.Sound(sound_path, secs=-1, stereo=-1, hamming=True, &amp;#10;#    volume=-1, name=sf)&amp;#10;#    sound_dict[sf] = sound_stimuli&amp;#10;&amp;#10;sound_files = sound_files * stimuli_repeat&amp;#10;n_trials = len(sound_files)&amp;#10;random.shuffle(sound_files)&amp;#10;sound_idx = 0&amp;#10;&amp;#10;&amp;#10;participant_id = expInfo['participant']&amp;#10;run = expInfo['run']&amp;#10;task = yaml_config['task']&amp;#10;&amp;#10;print(&quot;creating additional modalitiy recorders: PPG and Video&quot;)&amp;#10;global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread&amp;#10;recorder = VideoRecorder(cam_id=1, output_name=participant_id, display_video=False, enable_lsl=True)&amp;#10;ppg_recorder = PPGRecorder(port=&quot;COM5&quot;, enable_lsl=True, simulate_data=True)&amp;#10;recording_thread = threading.Thread(target=recorder.record_video)&amp;#10;ppg_thread = threading.Thread(target=ppg_recorder.start)&amp;#10;&amp;#10;&amp;#10;lsl_socket = socket.create_connection((&quot;localhost&quot;, 22345))&amp;#10;if lsl_socket is not None:&amp;#10;    started_recording = True&amp;#10;    print(f&quot;start record: {started_recording}&quot;)&amp;#10;    recording_thread.start()&amp;#10;    ppg_thread.start()&amp;#10;    template_str = os.path.join(&quot;sub-%p&quot;,&quot;sub-%p_task-%b_run-%n.xdf&quot;)&amp;#10;    config_str = f'filename {{root:{root_dir}}} {{template:{template_str}}} {{run:{run}}} {{participant:{participant_id}}} {{task:{task}}}\n'&amp;#10;    print(config_str)&amp;#10;&amp;#10;    lsl_socket.sendall(b&quot;update\n&quot;)&amp;#10;    lsl_socket.sendall(b&quot;select all\n&quot;)&amp;#10;    lsl_socket.sendall(config_str.encode('utf-8'))&amp;#10;    lsl_socket.sendall(b&quot;start\n&quot;)&amp;#10;   &amp;#10;    core.wait(5)&amp;#10;" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
-        <Param val="marker_outlet.push_sample([&quot;end&quot;])&amp;#10;if started_recording:&amp;#10;    lsl_socket.sendall(b&quot;stop\n&quot;)&amp;#10;    recorder.stop()&amp;#10;    ppg_recorder.stop()&amp;#10;    recording_thread.join()&amp;#10;    ppg_thread.join()&amp;#10;    started_recording = False&amp;#10;" valType="extendedCode" updates="constant" name="End Experiment"/>
+        <Param val="marker_outlet.push_sample([&quot;end&quot;])&amp;#10;" valType="extendedCode" updates="constant" name="End Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="End JS Routine"/>
         <Param val="" valType="extendedCode" updates="constant" name="End Routine"/>
@@ -596,9 +596,165 @@
         <Param val="" valType="list" updates="constant" name="vertices"/>
       </PolygonComponent>
     </Routine>
+    <Routine name="pmt_pre_stim">
+      <RoutineSettingsComponent name="pmt_pre_stim" plugin="None">
+        <Param val="none" valType="str" updates="None" name="backgroundFit"/>
+        <Param val="" valType="str" updates="None" name="backgroundImg"/>
+        <Param val="$[0,0,0]" valType="color" updates="None" name="color"/>
+        <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+        <Param val="" valType="str" updates="constant" name="desc"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
+        <Param val="pmt_pre_stim" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="constant" name="skipIf"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
+      </RoutineSettingsComponent>
+      <PolygonComponent name="black_screen" plugin="None">
+        <Param val="center" valType="str" updates="constant" name="anchor"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="-1.0000, -1.0000, -1.0000" valType="color" updates="constant" name="fillColor"/>
+        <Param val="linear" valType="str" updates="constant" name="interpolate"/>
+        <Param val="-1.0000, -1.0000, -1.0000" valType="color" updates="constant" name="lineColor"/>
+        <Param val="1" valType="num" updates="constant" name="lineWidth"/>
+        <Param val="4" valType="int" updates="constant" name="nVertices"/>
+        <Param val="black_screen" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="rectangle" valType="str" updates="None" name="shape"/>
+        <Param val="(2, 1)" valType="list" updates="constant" name="size"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="2" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="list" updates="constant" name="vertices"/>
+      </PolygonComponent>
+    </Routine>
+    <Routine name="pmt_stim">
+      <RoutineSettingsComponent name="pmt_stim" plugin="None">
+        <Param val="none" valType="str" updates="None" name="backgroundFit"/>
+        <Param val="" valType="str" updates="None" name="backgroundImg"/>
+        <Param val="$[0,0,0]" valType="color" updates="None" name="color"/>
+        <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+        <Param val="" valType="str" updates="constant" name="desc"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
+        <Param val="pmt_stim" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="constant" name="skipIf"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
+      </RoutineSettingsComponent>
+      <PolygonComponent name="gray_screen" plugin="None">
+        <Param val="center" valType="str" updates="constant" name="anchor"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="0.0039, 0.0039, 0.0039" valType="color" updates="constant" name="fillColor"/>
+        <Param val="linear" valType="str" updates="constant" name="interpolate"/>
+        <Param val="0.0039, 0.0039, 0.0039" valType="color" updates="constant" name="lineColor"/>
+        <Param val="1" valType="num" updates="constant" name="lineWidth"/>
+        <Param val="4" valType="int" updates="constant" name="nVertices"/>
+        <Param val="gray_screen" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="rectangle" valType="str" updates="None" name="shape"/>
+        <Param val="(2, 1)" valType="list" updates="constant" name="size"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="2" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="list" updates="constant" name="vertices"/>
+      </PolygonComponent>
+    </Routine>
+    <Routine name="pmt_post_stim">
+      <RoutineSettingsComponent name="pmt_post_stim" plugin="None">
+        <Param val="none" valType="str" updates="None" name="backgroundFit"/>
+        <Param val="" valType="str" updates="None" name="backgroundImg"/>
+        <Param val="$[0,0,0]" valType="color" updates="None" name="color"/>
+        <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+        <Param val="" valType="str" updates="constant" name="desc"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
+        <Param val="pmt_post_stim" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="constant" name="skipIf"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
+      </RoutineSettingsComponent>
+      <PolygonComponent name="black_screen_2" plugin="None">
+        <Param val="center" valType="str" updates="constant" name="anchor"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="-1.0000, -1.0000, -1.0000" valType="color" updates="constant" name="fillColor"/>
+        <Param val="linear" valType="str" updates="constant" name="interpolate"/>
+        <Param val="-1.0000, -1.0000, -1.0000" valType="color" updates="constant" name="lineColor"/>
+        <Param val="1" valType="num" updates="constant" name="lineWidth"/>
+        <Param val="4" valType="int" updates="constant" name="nVertices"/>
+        <Param val="black_screen_2" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="rectangle" valType="str" updates="None" name="shape"/>
+        <Param val="(2, 1)" valType="list" updates="constant" name="size"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="2" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="list" updates="constant" name="vertices"/>
+      </PolygonComponent>
+    </Routine>
   </Routines>
   <Flow>
     <Routine name="welcome"/>
+    <LoopInitiator loopType="TrialHandler" name="pmt_trials">
+      <Param name="Selected rows" updates="None" val="" valType="str"/>
+      <Param name="conditions" updates="None" val="None" valType="str"/>
+      <Param name="conditionsFile" updates="None" val="" valType="file"/>
+      <Param name="endPoints" updates="None" val="[0, 1]" valType="num"/>
+      <Param name="isTrials" updates="None" val="True" valType="bool"/>
+      <Param name="loopType" updates="None" val="sequential" valType="str"/>
+      <Param name="nReps" updates="None" val="5" valType="num"/>
+      <Param name="name" updates="None" val="pmt_trials" valType="code"/>
+      <Param name="random seed" updates="None" val="" valType="code"/>
+    </LoopInitiator>
+    <Routine name="pmt_pre_stim"/>
+    <Routine name="pmt_stim"/>
+    <Routine name="pmt_post_stim"/>
+    <LoopTerminator name="pmt_trials"/>
     <Routine name="base"/>
     <LoopInitiator loopType="TrialHandler" name="trials">
       <Param name="Selected rows" updates="None" val="" valType="str"/>

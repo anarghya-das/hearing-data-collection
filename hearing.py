@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 This experiment was created using PsychoPy3 Experiment Builder (v2024.2.4),
-    on Fri Nov 29 18:08:20 2024
+    on December 02, 2024, at 12:43
 If you publish work using this script the most relevant publication is:
 
     Peirce J, Gray JR, Simpson S, MacAskill M, Höchenberger R, Sogo H, Kastman E, Lindeløv JK. (2019) 
@@ -38,10 +38,189 @@ import os
 import random
 from pylsl import StreamInfo, StreamOutlet
 import socket
-from psychopy import sound
+from psychopy import sound, core
 import yaml
+import cv2
+import signal
+import sys
+import threading
+from datetime import datetime
 import platform
+import threading
+import serial
+import csv
+import random
+import time
+import atexit
 
+started_recording = False
+original_quit = core.quit
+
+def cleanup():
+    global started_recording
+    print("At exit...")
+    if started_recording:
+        print("Performing cleanup tasks...")
+        lsl_socket.sendall(b"stop\n")
+        recorder.stop()
+        ppg_recorder.stop()
+        recording_thread.join()
+        ppg_thread.join()
+        started_recording = False
+
+def custom_quit():
+    cleanup()  # Your cleanup function
+    original_quit()
+
+class VideoRecorder:
+    def __init__(self, cam_id=0, output_name='output', default_fps=30, display_video=False, enable_lsl=False):
+        print("VideoRecorder start.")
+        self.cam_id = cam_id
+        self.output_path = os.path.join(os.getcwd(),"input", f"{output_name}.avi")
+        self.display_video = display_video
+        self.enable_lsl = enable_lsl
+        self.cap = None
+        self.out = None
+        self.video_outlet = None
+        self.default_fps = default_fps
+        self.stop_event = threading.Event()
+        if self.enable_lsl:
+            info = StreamInfo('VideoStream', 'Video', 1, self.default_fps,
+                              'float32', 'videouid34234')
+            self.video_outlet = StreamOutlet(info)
+        print("VideoRecorder initialized successfully.")
+
+    def signal_handler(self, sig, frame):
+        print('Termination signal received. Releasing resources...')
+        self.stop()
+        sys.exit(0)
+
+    def stop(self):
+        self.stop_event.set()
+
+    def release_resources(self):
+        if self.cap:
+            self.cap.release()
+        if self.out:
+            self.out.release()
+        cv2.destroyAllWindows()
+
+    def record_video(self):
+        backend = cv2.CAP_DSHOW if platform.system() == 'Windows' else None
+        self.cap = cv2.VideoCapture(self.cam_id, backend)
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.out = cv2.VideoWriter(
+            self.output_path, fourcc, self.default_fps, (frame_width, frame_height))
+
+        frame_number = 0
+        try:
+            while self.cap.isOpened() and not self.stop_event.is_set():
+                ret, frame = self.cap.read()
+                if ret:
+                    now = datetime.now()
+                    timestamp = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+                    if self.video_outlet:
+                        self.video_outlet.push_sample([frame_number])
+
+                    colour = (0, 255, 0)
+                    origin = (10, 30)
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    scale = 1
+                    thickness = 2
+
+                    cv2.putText(frame, timestamp, origin,
+                                font, scale, colour, thickness)
+                    self.out.write(frame)
+                    frame_number += 1
+                    if self.display_video:
+                        cv2.imshow('frame', frame)
+
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+                else:
+                    break
+        finally:
+            self.release_resources()
+
+class PPGRecorder:
+    def __init__(self, port, baud_rate=9600, enable_lsl=True, simulate_data=False):
+        self.port = port
+        self.baud_rate = baud_rate
+        self.enable_lsl = enable_lsl
+        self.simulate_data = simulate_data
+        self.ser = None
+        self.stop_event = threading.Event()
+        self.sample_rate = 50
+
+        if self.enable_lsl:
+            info = StreamInfo('PPGStream', 'PPG', 1, self.sample_rate,
+                              'float32', 'ppguid34234')
+            self.ppg_outlet = StreamOutlet(info)
+
+    def start(self):
+        if self.simulate_data:
+            self.simulate_ppg_data()
+        else:
+            try:
+                self.ser = serial.Serial(self.port, self.baud_rate, timeout=1)
+                time.sleep(2)  # Wait for the connection to be established
+                print(f"Successfully connected to {self.port}")
+
+                self.record_ppg()
+            except serial.SerialException as e:
+                print(f"Serial error: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+
+    def stop(self):
+        self.stop_event.set()
+
+    def record_ppg(self):
+        with open('pulse_data.csv', 'w', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(['Datetime', 'Timestamp', 'Signal'])
+
+            print("Logging data. Press 'q' to stop.")
+            while not self.stop_event.is_set():
+                signal = self.read_signal()
+                if signal:
+                    timestamp = time.time()
+                    datetime_str = datetime.fromtimestamp(
+                        timestamp).strftime('%Y-%m-%d %H:%M:%S.%f')
+                    csvwriter.writerow([datetime_str, timestamp, signal])
+
+                    if self.enable_lsl:
+                        self.ppg_outlet.push_sample([float(signal)])
+                else:
+                    print("No signal received.")
+
+    def read_signal(self):
+        try:
+            signal = self.ser.readline().decode('utf-8').strip()
+            return signal
+        except Exception as e:
+            print(f"Error reading signal: {e}")
+            return None
+
+    def simulate_ppg_data(self):
+        print("Simulating PPG data. Press 'q' to stop.")
+        while not self.stop_event.is_set():
+            signal = random.uniform(0.0, 1.0)  # Simulate a random PPG signal
+
+            if self.enable_lsl:
+                self.ppg_outlet.push_sample([signal])
+
+            time.sleep(0.02)  # Simulate a 50 Hz signal
+
+    def release_resources(self):
+        if self.ser and self.ser.is_open:
+            self.ser.close()
+            print(f"Closed connection to {self.port}")
+
+core.quit = custom_quit
+atexit.register(cleanup)
 marker_info = StreamInfo('HearingMarkerStream', 'Markers',
                          1, 0, 'string', 'hearingid2023')
 
@@ -49,8 +228,8 @@ config_file = open('config.yaml')
 yaml_config = yaml.safe_load(config_file)
 marker_outlet = StreamOutlet(marker_info)
 
-started_recording = False
-lsl_socket = socket.create_connection(("localhost", 22345))
+
+
 # --- Setup global variables (available in all functions) ---
 # create a device manager to handle hardware (keyboards, mice, mirophones, speakers, etc.)
 deviceManager = hardware.DeviceManager()
@@ -79,7 +258,7 @@ or run the experiment with `--pilot` as an argument. To change what pilot
 PILOTING = core.setPilotModeFromArgs()
 # start off with values from experiment settings
 _fullScr = True
-_winSize = [1536, 864]
+_winSize = [2560, 1440]
 # if in pilot mode, apply overrides according to preferences
 if PILOTING:
     # force windowed mode
@@ -145,7 +324,7 @@ def setupData(expInfo, dataDir=None):
     thisExp = data.ExperimentHandler(
         name=expName, version='',
         extraInfo=expInfo, runtimeInfo=None,
-        originPath='/Users/anarghya/Developer/research/hearing-experiment/hearing.py',
+        originPath='D:\\projects\\hearing-data-collection\\hearing.py',
         savePickle=True, saveWideText=True,
         dataFileName=dataDir + os.sep + filename, sortColumns='time'
     )
@@ -212,7 +391,7 @@ def setupWindow(expInfo=None, win=None):
     if win is None:
         # if not given a window to setup, make one
         win = visual.Window(
-            size=_winSize, fullscr=_fullScr, screen=1,
+            size=_winSize, fullscr=_fullScr, screen=0,
             winType='pyglet', allowGUI=False, allowStencil=False,
             monitor='testMonitor', color=[-1.0000, -1.0000, -1.0000], colorSpace='rgb',
             backgroundImage='', backgroundFit='none',
@@ -403,7 +582,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     stimulus_dration = exp_config['stimulus_dration']
     response_duration = exp_config['response_duration']
     rest_range = exp_config['rest_range']
-    
+    root_dir = os.path.join(os.getcwd(),"exp_data") 
     
     #sound_dict = {}
     #for sf in sound_files:
@@ -422,16 +601,28 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     run = expInfo['run']
     task = yaml_config['task']
     
+    print("creating additional modalitiy recorders: PPG and Video")
+    recorder = VideoRecorder(cam_id=1, output_name=participant_id, display_video=False, enable_lsl=True)
+    ppg_recorder = PPGRecorder(port="COM5", enable_lsl=True, simulate_data=True)
+    recording_thread = threading.Thread(target=recorder.record_video)
+    ppg_thread = threading.Thread(target=ppg_recorder.start)
+    
+    
+    lsl_socket = socket.create_connection(("localhost", 22345))
     if lsl_socket is not None:
         started_recording = True
-        config_str = f'filename {{template:sub-%p/sub-%p_task-%b_run-%n.xdf}} {{run:{run}}} {{participant:{participant_id}}} {{task:{task}}}\n'
+        recording_thread.start()
+        ppg_thread.start()
+        template_str = os.path.join("sub-%p","sub-%p_task-%b_run-%n.xdf")
+        config_str = f'filename {{root:{root_dir}}} {{template:{template_str}}} {{run:{run}}} {{participant:{participant_id}}} {{task:{task}}}\n'
         print(config_str)
     
         lsl_socket.sendall(b"update\n")
         lsl_socket.sendall(b"select all\n")
         lsl_socket.sendall(config_str.encode('utf-8'))
         lsl_socket.sendall(b"start\n")
-        
+       
+        core.wait(5)
     
     text_2 = visual.TextStim(win=win, name='text_2',
         text='Welcome!\n\nIn this experiment, you will listen to several different sounds. Once the audio finishes playing, you must sit still and focus on it.  \n\nPress the space key to start the experiment.',
@@ -444,7 +635,6 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     
     # --- Initialize components for Routine "base" ---
     # Run 'Begin Experiment' code from code_3
-    print("sending baseline")
     marker_outlet.push_sample(["baseline"])
     polygon = visual.ShapeStim(
         win=win, name='polygon',
@@ -1215,11 +1405,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         # if running in a Session with a Liaison client, send data up to now
         thisSession.sendExperimentData()
     # Run 'End Experiment' code from code_init
-    print("sending end")
     marker_outlet.push_sample(["end"])
-    if started_recording:
-        lsl_socket.sendall(b"stop\n")
-        started_recording = False
     
     
     # mark experiment as finished
