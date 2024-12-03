@@ -22,19 +22,41 @@ test:
   rest_range: [2, 3]
 hearing:
   prestim: &prestim_value 5
+  stim: &stim_value 2
+  poststim: &poststim_value 5
   pmt_prestim: *prestim_value
-  pmt_stim: 2
-  pmt_poststim: 5
-  pmt_trials: 4
-  hlt_prestim : 5
-  hlt_stim: 2
-  hlt_poststim: 5
-  hlt_trials: 4
-  let_prestim : 5
-  let_stim: 2
-  let_poststim: 5
-  let_trials: 4
-  ast_prestim: 5
-  ast_stim: 6
-  ast_poststim: 5
-  ast_trials: 4
+  pmt_stim: *stim_value
+  pmt_poststim: *poststim_value
+  pmt_trials: 5
+  hlt_prestim : *prestim_value
+  hlt_stim: *stim_value
+  hlt_poststim: *poststim_value
+  hlt_trials: 5
+  let_prestim : *prestim_value
+  let_stim: *stim_value
+  let_poststim: *poststim_value
+  let_trials: 5
+  ast_prestim: *prestim_value
+  ast_stim: *stim_value
+  ast_poststim: *poststim_value
+  ast_trials: 5 
+test_hearing:
+  prestim: &prestim_value 1
+  stim: &stim_value 2
+  poststim: &poststim_value 1
+  pmt_prestim: *prestim_value
+  pmt_stim: *stim_value
+  pmt_poststim: *poststim_value
+  pmt_trials: 1
+  hlt_prestim : *prestim_value
+  hlt_stim: *stim_value
+  hlt_poststim: *poststim_value
+  hlt_trials: 1
+  let_prestim : *prestim_value
+  let_stim: *stim_value
+  let_poststim: *poststim_value
+  let_trials: 1
+  ast_prestim: *prestim_value
+  ast_stim: *stim_value
+  ast_poststim: *poststim_value
+  ast_trials: 1
