@@ -99,9 +99,9 @@
         <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
       </RoutineSettingsComponent>
       <CodeComponent name="code_init" plugin="None">
-        <Param val="import os&amp;#10;import random&amp;#10;from pylsl import StreamInfo, StreamOutlet&amp;#10;import socket&amp;#10;from psychopy import sound, core&amp;#10;import yaml&amp;#10;import cv2&amp;#10;import signal&amp;#10;import sys&amp;#10;import threading&amp;#10;from datetime import datetime&amp;#10;import platform&amp;#10;import threading&amp;#10;import serial&amp;#10;import csv&amp;#10;import random&amp;#10;import time&amp;#10;import atexit&amp;#10;&amp;#10;started_recording = False&amp;#10;original_quit = core.quit&amp;#10;lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread = None, None, None, None, None&amp;#10;&amp;#10;def cleanup():&amp;#10;    global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread&amp;#10;    print(&quot;At exit...&quot;)&amp;#10;    if started_recording:&amp;#10;        print(&quot;Performing cleanup tasks...&quot;)&amp;#10;        recorder.stop()&amp;#10;        ppg_recorder.stop()&amp;#10;        recording_thread.join()&amp;#10;        ppg_thread.join()&amp;#10;        started_recording = False&amp;#10;&amp;#10;def custom_quit():&amp;#10;    cleanup()  # Your cleanup function&amp;#10;    original_quit()&amp;#10;&amp;#10;class VideoRecorder:&amp;#10;    def __init__(self, cam_id=0, output_name='output', default_fps=30, display_video=False, enable_lsl=False):&amp;#10;        print(&quot;VideoRecorder start.&quot;)&amp;#10;        self.cam_id = cam_id&amp;#10;        self.output_path = os.path.join(os.getcwd(),&quot;input&quot;, f&quot;{output_name}.avi&quot;)&amp;#10;        self.display_video = display_video&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.cap = None&amp;#10;        self.out = None&amp;#10;        self.video_outlet = None&amp;#10;        self.default_fps = default_fps&amp;#10;        self.stop_event = threading.Event()&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('VideoStream', 'Video', 1, self.default_fps,&amp;#10;                              'float32', 'videouid34234')&amp;#10;            self.video_outlet = StreamOutlet(info)&amp;#10;        print(&quot;VideoRecorder initialized successfully.&quot;)&amp;#10;&amp;#10;    def signal_handler(self, sig, frame):&amp;#10;        print('Termination signal received. Releasing resources...')&amp;#10;        self.stop()&amp;#10;        sys.exit(0)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.cap:&amp;#10;            self.cap.release()&amp;#10;        if self.out:&amp;#10;            self.out.release()&amp;#10;        cv2.destroyAllWindows()&amp;#10;&amp;#10;    def record_video(self):&amp;#10;        backend = cv2.CAP_DSHOW if platform.system() == 'Windows' else None&amp;#10;        self.cap = cv2.VideoCapture(self.cam_id, backend)&amp;#10;        fourcc = cv2.VideoWriter_fourcc(*'XVID')&amp;#10;        frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))&amp;#10;        frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))&amp;#10;        self.out = cv2.VideoWriter(&amp;#10;            self.output_path, fourcc, self.default_fps, (frame_width, frame_height))&amp;#10;&amp;#10;        frame_number = 0&amp;#10;        try:&amp;#10;            while self.cap.isOpened() and not self.stop_event.is_set():&amp;#10;                ret, frame = self.cap.read()&amp;#10;                if ret:&amp;#10;                    now = datetime.now()&amp;#10;                    timestamp = now.strftime(&quot;%Y-%m-%d %H:%M:%S.%f&quot;)&amp;#10;                    if self.video_outlet:&amp;#10;                        self.video_outlet.push_sample([frame_number])&amp;#10;&amp;#10;                    colour = (0, 255, 0)&amp;#10;                    origin = (10, 30)&amp;#10;                    font = cv2.FONT_HERSHEY_SIMPLEX&amp;#10;                    scale = 1&amp;#10;                    thickness = 2&amp;#10;&amp;#10;                    cv2.putText(frame, timestamp, origin,&amp;#10;                                font, scale, colour, thickness)&amp;#10;                    self.out.write(frame)&amp;#10;                    frame_number += 1&amp;#10;                    if self.display_video:&amp;#10;                        cv2.imshow('frame', frame)&amp;#10;&amp;#10;                    if cv2.waitKey(1) &amp; 0xFF == ord('q'):&amp;#10;                        break&amp;#10;                else:&amp;#10;                    break&amp;#10;        finally:&amp;#10;            self.release_resources()&amp;#10;&amp;#10;class PPGRecorder:&amp;#10;    def __init__(self, port, baud_rate=9600, enable_lsl=True, simulate_data=False):&amp;#10;        self.port = port&amp;#10;        self.baud_rate = baud_rate&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.simulate_data = simulate_data&amp;#10;        self.ser = None&amp;#10;        self.stop_event = threading.Event()&amp;#10;        self.sample_rate = 50&amp;#10;&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('PPGStream', 'PPG', 1, self.sample_rate,&amp;#10;                              'float32', 'ppguid34234')&amp;#10;            self.ppg_outlet = StreamOutlet(info)&amp;#10;&amp;#10;    def start(self):&amp;#10;        if self.simulate_data:&amp;#10;            self.simulate_ppg_data()&amp;#10;        else:&amp;#10;            try:&amp;#10;                self.ser = serial.Serial(self.port, self.baud_rate, timeout=1)&amp;#10;                time.sleep(2)  # Wait for the connection to be established&amp;#10;                print(f&quot;Successfully connected to {self.port}&quot;)&amp;#10;&amp;#10;                self.record_ppg()&amp;#10;            except serial.SerialException as e:&amp;#10;                print(f&quot;Serial error: {e}&quot;)&amp;#10;            except Exception as e:&amp;#10;                print(f&quot;An error occurred: {e}&quot;)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def record_ppg(self):&amp;#10;        with open('pulse_data.csv', 'w', newline='') as csvfile:&amp;#10;            csvwriter = csv.writer(csvfile)&amp;#10;            csvwriter.writerow(['Datetime', 'Timestamp', 'Signal'])&amp;#10;&amp;#10;            print(&quot;Logging data. Press 'q' to stop.&quot;)&amp;#10;            while not self.stop_event.is_set():&amp;#10;                signal = self.read_signal()&amp;#10;                if signal:&amp;#10;                    timestamp = time.time()&amp;#10;                    datetime_str = datetime.fromtimestamp(&amp;#10;                        timestamp).strftime('%Y-%m-%d %H:%M:%S.%f')&amp;#10;                    csvwriter.writerow([datetime_str, timestamp, signal])&amp;#10;&amp;#10;                    if self.enable_lsl:&amp;#10;                        self.ppg_outlet.push_sample([float(signal)])&amp;#10;                else:&amp;#10;                    print(&quot;No signal received.&quot;)&amp;#10;&amp;#10;    def read_signal(self):&amp;#10;        try:&amp;#10;            signal = self.ser.readline().decode('utf-8').strip()&amp;#10;            return signal&amp;#10;        except Exception as e:&amp;#10;            print(f&quot;Error reading signal: {e}&quot;)&amp;#10;            return None&amp;#10;&amp;#10;    def simulate_ppg_data(self):&amp;#10;        print(&quot;Simulating PPG data. Press 'q' to stop.&quot;)&amp;#10;        while not self.stop_event.is_set():&amp;#10;            signal = random.uniform(0.0, 1.0)  # Simulate a random PPG signal&amp;#10;&amp;#10;            if self.enable_lsl:&amp;#10;                self.ppg_outlet.push_sample([signal])&amp;#10;&amp;#10;            time.sleep(0.02)  # Simulate a 50 Hz signal&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.ser and self.ser.is_open:&amp;#10;            self.ser.close()&amp;#10;            print(f&quot;Closed connection to {self.port}&quot;)&amp;#10;&amp;#10;core.quit = custom_quit&amp;#10;atexit.register(cleanup)&amp;#10;marker_info = StreamInfo('HearingMarkerStream', 'Markers',&amp;#10;                         1, 0, 'string', 'hearingid2023')&amp;#10;&amp;#10;config_file = open('config.yaml')&amp;#10;yaml_config = yaml.safe_load(config_file)&amp;#10;marker_outlet = StreamOutlet(marker_info)&amp;#10;" valType="extendedCode" updates="constant" name="Before Experiment"/>
+        <Param val="import os&amp;#10;import random&amp;#10;from pylsl import StreamInfo, StreamOutlet&amp;#10;import socket&amp;#10;from psychopy import sound, core&amp;#10;import yaml&amp;#10;import cv2&amp;#10;import signal&amp;#10;import sys&amp;#10;import threading&amp;#10;from datetime import datetime&amp;#10;import platform&amp;#10;import threading&amp;#10;import serial&amp;#10;import csv&amp;#10;import random&amp;#10;import time&amp;#10;import atexit&amp;#10;&amp;#10;started_recording = False&amp;#10;original_quit = core.quit&amp;#10;lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread = None, None, None, None, None&amp;#10;&amp;#10;def cleanup():&amp;#10;    global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread&amp;#10;    print(&quot;At exit...&quot;)&amp;#10;    if started_recording:&amp;#10;        print(&quot;Performing cleanup tasks...&quot;)&amp;#10;        recorder.stop()&amp;#10;        ppg_recorder.stop()&amp;#10;        recording_thread.join()&amp;#10;        ppg_thread.join()&amp;#10;        started_recording = False&amp;#10;&amp;#10;def custom_quit():&amp;#10;    cleanup()  # Your cleanup function&amp;#10;    original_quit()&amp;#10;&amp;#10;class VideoRecorder:&amp;#10;    def __init__(self, cam_id=0, output_name='output', default_fps=30, display_video=False, enable_lsl=False):&amp;#10;        print(&quot;VideoRecorder start.&quot;)&amp;#10;        self.cam_id = cam_id&amp;#10;        self.output_path = os.path.join(os.getcwd(),&quot;input&quot;, f&quot;{output_name}.avi&quot;)&amp;#10;        self.display_video = display_video&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.cap = None&amp;#10;        self.out = None&amp;#10;        self.video_outlet = None&amp;#10;        self.default_fps = default_fps&amp;#10;        self.stop_event = threading.Event()&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('VideoStream', 'Video', 1, self.default_fps,&amp;#10;                              'float32', 'videouid34234')&amp;#10;            self.video_outlet = StreamOutlet(info)&amp;#10;        print(&quot;VideoRecorder initialized successfully.&quot;)&amp;#10;&amp;#10;    def signal_handler(self, sig, frame):&amp;#10;        print('Termination signal received. Releasing resources...')&amp;#10;        self.stop()&amp;#10;        sys.exit(0)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.cap:&amp;#10;            self.cap.release()&amp;#10;        if self.out:&amp;#10;            self.out.release()&amp;#10;        cv2.destroyAllWindows()&amp;#10;&amp;#10;    def record_video(self):&amp;#10;        backend = cv2.CAP_DSHOW if platform.system() == 'Windows' else None&amp;#10;        self.cap = cv2.VideoCapture(self.cam_id, backend)&amp;#10;        fourcc = cv2.VideoWriter_fourcc(*'XVID')&amp;#10;        frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))&amp;#10;        frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))&amp;#10;        self.out = cv2.VideoWriter(&amp;#10;            self.output_path, fourcc, self.default_fps, (frame_width, frame_height))&amp;#10;&amp;#10;        frame_number = 0&amp;#10;        try:&amp;#10;            while self.cap.isOpened() and not self.stop_event.is_set():&amp;#10;                ret, frame = self.cap.read()&amp;#10;                if ret:&amp;#10;                    now = datetime.now()&amp;#10;                    timestamp = now.strftime(&quot;%Y-%m-%d %H:%M:%S.%f&quot;)&amp;#10;                    if self.video_outlet:&amp;#10;                        self.video_outlet.push_sample([frame_number])&amp;#10;&amp;#10;                    colour = (0, 255, 0)&amp;#10;                    origin = (10, 30)&amp;#10;                    font = cv2.FONT_HERSHEY_SIMPLEX&amp;#10;                    scale = 1&amp;#10;                    thickness = 2&amp;#10;&amp;#10;                    cv2.putText(frame, timestamp, origin,&amp;#10;                                font, scale, colour, thickness)&amp;#10;                    self.out.write(frame)&amp;#10;                    frame_number += 1&amp;#10;                    if self.display_video:&amp;#10;                        cv2.imshow('frame', frame)&amp;#10;&amp;#10;                    if cv2.waitKey(1) &amp; 0xFF == ord('q'):&amp;#10;                        break&amp;#10;                else:&amp;#10;                    break&amp;#10;        finally:&amp;#10;            self.release_resources()&amp;#10;&amp;#10;class PPGRecorder:&amp;#10;    def __init__(self, port, baud_rate=9600, enable_lsl=True, simulate_data=False):&amp;#10;        self.port = port&amp;#10;        self.baud_rate = baud_rate&amp;#10;        self.enable_lsl = enable_lsl&amp;#10;        self.simulate_data = simulate_data&amp;#10;        self.ser = None&amp;#10;        self.stop_event = threading.Event()&amp;#10;        self.sample_rate = 50 # TODO update with actual sampling rate&amp;#10;&amp;#10;        if self.enable_lsl:&amp;#10;            info = StreamInfo('PPGStream', 'PPG', 1, self.sample_rate,&amp;#10;                              'float32', 'ppguid34234')&amp;#10;            self.ppg_outlet = StreamOutlet(info)&amp;#10;&amp;#10;    def start(self):&amp;#10;        if self.simulate_data:&amp;#10;            self.simulate_ppg_data()&amp;#10;        else:&amp;#10;            try:&amp;#10;                self.ser = serial.Serial(self.port, self.baud_rate, timeout=1)&amp;#10;                time.sleep(2)  # Wait for the connection to be established&amp;#10;                print(f&quot;Successfully connected to {self.port}&quot;)&amp;#10;&amp;#10;                self.record_ppg()&amp;#10;            except serial.SerialException as e:&amp;#10;                print(f&quot;Serial error: {e}&quot;)&amp;#10;            except Exception as e:&amp;#10;                print(f&quot;An error occurred: {e}&quot;)&amp;#10;&amp;#10;    def stop(self):&amp;#10;        self.stop_event.set()&amp;#10;&amp;#10;    def record_ppg(self):&amp;#10;        with open('pulse_data.csv', 'w', newline='') as csvfile:&amp;#10;            csvwriter = csv.writer(csvfile)&amp;#10;            csvwriter.writerow(['Datetime', 'Timestamp', 'Signal'])&amp;#10;&amp;#10;            print(&quot;Logging data. Press 'q' to stop.&quot;)&amp;#10;            while not self.stop_event.is_set():&amp;#10;                signal = self.read_signal()&amp;#10;                if signal:&amp;#10;                    timestamp = time.time()&amp;#10;                    datetime_str = datetime.fromtimestamp(&amp;#10;                        timestamp).strftime('%Y-%m-%d %H:%M:%S.%f')&amp;#10;                    csvwriter.writerow([datetime_str, timestamp, signal])&amp;#10;&amp;#10;                    if self.enable_lsl:&amp;#10;                        self.ppg_outlet.push_sample([float(signal)])&amp;#10;                else:&amp;#10;                    print(&quot;No signal received.&quot;)&amp;#10;&amp;#10;    def read_signal(self):&amp;#10;        try:&amp;#10;            signal = self.ser.readline().decode('utf-8').strip()&amp;#10;            return signal&amp;#10;        except Exception as e:&amp;#10;            print(f&quot;Error reading signal: {e}&quot;)&amp;#10;            return None&amp;#10;&amp;#10;    def simulate_ppg_data(self):&amp;#10;        print(&quot;Simulating PPG data. Press 'q' to stop.&quot;)&amp;#10;        while not self.stop_event.is_set():&amp;#10;            signal = random.uniform(0.0, 1.0)  # Simulate a random PPG signal&amp;#10;&amp;#10;            if self.enable_lsl:&amp;#10;                self.ppg_outlet.push_sample([signal])&amp;#10;&amp;#10;            time.sleep(0.02)  # Simulate a 50 Hz signal&amp;#10;&amp;#10;    def release_resources(self):&amp;#10;        if self.ser and self.ser.is_open:&amp;#10;            self.ser.close()&amp;#10;            print(f&quot;Closed connection to {self.port}&quot;)&amp;#10;&amp;#10;core.quit = custom_quit&amp;#10;atexit.register(cleanup)&amp;#10;marker_info = StreamInfo('HearingMarkerStream', 'Markers',&amp;#10;                         1, 0, 'string', 'hearingid2023')&amp;#10;&amp;#10;config_file = open('config.yaml')&amp;#10;yaml_config = yaml.safe_load(config_file)&amp;#10;marker_outlet = StreamOutlet(marker_info)&amp;#10;" valType="extendedCode" updates="constant" name="Before Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Before JS Experiment"/>
-        <Param val="config_type = expInfo['config']&amp;#10;exp_config = yaml_config[config_type]&amp;#10;&amp;#10;stim_root = os.path.join(os.getcwd(),&quot;stimuli&quot;) &amp;#10;# Pupil Muscular Test (PMT) variables&amp;#10;pmt_prestim_duration = exp_config['pmt_prestim']&amp;#10;pmt_stim_duration = exp_config['pmt_stim']&amp;#10;pmt_poststim_duration = exp_config['pmt_poststim']&amp;#10;pmt_trials = exp_config['pmt_trials']&amp;#10;# Hearing Loudness Test (HLT) variables&amp;#10;hlt_prestim_duration = exp_config['hlt_prestim']&amp;#10;hlt_stim_duration = exp_config['hlt_stim']&amp;#10;hlt_poststim_duration = exp_config['hlt_poststim']&amp;#10;hlt_repeats = exp_config['hlt_trials']&amp;#10;hlt_folder = os.path.join(stim_root,&quot;hlt&quot;)&amp;#10;hlt_stims = [os.path.join(hlt_folder, file) for file in os.listdir(hlt_folder)]&amp;#10;hlt_stims = hlt_stims * hlt_repeats&amp;#10;hlt_trials = len(hlt_stims)&amp;#10;hlt_idx = 0&amp;#10;# Listening Effort Test (LET) variables&amp;#10;let_prestim_duration = exp_config['let_prestim']&amp;#10;let_stim_duration = exp_config['let_stim']&amp;#10;let_poststim_duration = exp_config['let_poststim']&amp;#10;let_repeats = exp_config['let_trials']&amp;#10;let_folder = os.path.join(stim_root,&quot;let&quot;)&amp;#10;let_stims = [os.path.join(let_folder, file) for file in os.listdir(let_folder)]&amp;#10;let_stims = let_stims * let_repeats&amp;#10;let_trials = len(let_stims)&amp;#10;let_idx = 0 &amp;#10;#Aversion Sound Test (AST) variables&amp;#10;ast_prestim_duration = exp_config['ast_prestim']&amp;#10;ast_stim_duration = exp_config['ast_stim']&amp;#10;ast_poststim_duration = exp_config['ast_poststim']&amp;#10;ast_repeats = exp_config['ast_trials']&amp;#10;ast_folder = os.path.join(stim_root,&quot;ast&quot;)&amp;#10;ast_stims = [os.path.join(ast_folder, file) for file in os.listdir(ast_folder)]&amp;#10;ast_stims = ast_stims * ast_repeats&amp;#10;ast_trials = len(ast_stims)&amp;#10;random.shuffle(ast_stims)&amp;#10;ast_idx = 0&amp;#10;&amp;#10;root_dir = os.path.join(os.getcwd(),&quot;exp_data&quot;) &amp;#10;participant_id = expInfo['participant']&amp;#10;run = expInfo['run']&amp;#10;task = yaml_config['task']&amp;#10;&amp;#10;print(&quot;creating additional modalitiy recorders: PPG and Video&quot;)&amp;#10;global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread&amp;#10;recorder = VideoRecorder(cam_id=1, output_name=participant_id, display_video=False, enable_lsl=True)&amp;#10;ppg_recorder = PPGRecorder(port=&quot;COM5&quot;, enable_lsl=True, simulate_data=True)&amp;#10;recording_thread = threading.Thread(target=recorder.record_video)&amp;#10;ppg_thread = threading.Thread(target=ppg_recorder.start)&amp;#10;&amp;#10;&amp;#10;lsl_socket = socket.create_connection((&quot;localhost&quot;, 22345))&amp;#10;if lsl_socket is not None:&amp;#10;    started_recording = True&amp;#10;    print(f&quot;start record: {started_recording}&quot;)&amp;#10;    recording_thread.start()&amp;#10;    ppg_thread.start()&amp;#10;    template_str = os.path.join(&quot;sub-%p&quot;,&quot;sub-%p_task-%b_run-%n.xdf&quot;)&amp;#10;    config_str = f'filename {{root:{root_dir}}} {{template:{template_str}}} {{run:{run}}} {{participant:{participant_id}}} {{task:{task}}}\n'&amp;#10;    print(config_str)&amp;#10;&amp;#10;    lsl_socket.sendall(b&quot;update\n&quot;)&amp;#10;    lsl_socket.sendall(b&quot;select all\n&quot;)&amp;#10;    lsl_socket.sendall(config_str.encode('utf-8'))&amp;#10;    lsl_socket.sendall(b&quot;start\n&quot;)&amp;#10;   &amp;#10;    core.wait(5)&amp;#10;" valType="extendedCode" updates="constant" name="Begin Experiment"/>
+        <Param val="config_type = expInfo['config']&amp;#10;exp_config = yaml_config[config_type]&amp;#10;&amp;#10;stim_root = os.path.join(os.getcwd(),&quot;stimuli&quot;) &amp;#10;# Pupil Muscular Test (PMT) variables&amp;#10;pmt_prestim_duration = exp_config['pmt_prestim']&amp;#10;pmt_stim_duration = exp_config['pmt_stim']&amp;#10;pmt_poststim_duration = exp_config['pmt_poststim']&amp;#10;pmt_trials = exp_config['pmt_trials']&amp;#10;# Hearing Loudness Test (HLT) variables&amp;#10;hlt_prestim_duration = exp_config['hlt_prestim']&amp;#10;hlt_stim_duration = exp_config['hlt_stim']&amp;#10;hlt_poststim_duration = exp_config['hlt_poststim']&amp;#10;hlt_repeats = exp_config['hlt_trials']&amp;#10;hlt_folder = os.path.join(stim_root,&quot;hlt&quot;)&amp;#10;hlt_stims = [os.path.join(hlt_folder, file) for file in os.listdir(hlt_folder) if file.endswith('.wav')]&amp;#10;hlt_stims = hlt_stims * hlt_repeats&amp;#10;hlt_trials = len(hlt_stims)&amp;#10;hlt_idx = 0&amp;#10;# Listening Effort Test (LET) variables&amp;#10;let_prestim_duration = exp_config['let_prestim']&amp;#10;let_stim_duration = exp_config['let_stim']&amp;#10;let_poststim_duration = exp_config['let_poststim']&amp;#10;let_repeats = exp_config['let_trials']&amp;#10;let_folder = os.path.join(stim_root,&quot;let&quot;)&amp;#10;let_stims = [os.path.join(let_folder, file) for file in os.listdir(let_folder) if file.endswith('.wav')]&amp;#10;let_stims = let_stims * let_repeats&amp;#10;let_trials = len(let_stims)&amp;#10;let_idx = 0 &amp;#10;#Aversion Sound Test (AST) variables&amp;#10;ast_prestim_duration = exp_config['ast_prestim']&amp;#10;ast_stim_duration = exp_config['ast_stim']&amp;#10;ast_poststim_duration = exp_config['ast_poststim']&amp;#10;ast_repeats = exp_config['ast_trials']&amp;#10;ast_folder = os.path.join(stim_root,&quot;ast&quot;)&amp;#10;ast_stims = [os.path.join(ast_folder, file) for file in os.listdir(ast_folder) if file.endswith('.wav')]&amp;#10;ast_stims = ast_stims * ast_repeats&amp;#10;ast_trials = len(ast_stims)&amp;#10;random.shuffle(ast_stims)&amp;#10;ast_idx = 0&amp;#10;&amp;#10;root_dir = os.path.join(os.getcwd(),&quot;exp_data&quot;) &amp;#10;participant_id = expInfo['participant']&amp;#10;run = expInfo['run']&amp;#10;task = yaml_config['task']&amp;#10;&amp;#10;print(&quot;creating additional modalitiy recorders: PPG and Video&quot;)&amp;#10;global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread&amp;#10;recorder = VideoRecorder(cam_id=1, output_name=participant_id, display_video=False, enable_lsl=True)&amp;#10;ppg_recorder = PPGRecorder(port=&quot;COM4&quot;, enable_lsl=True, simulate_data=True)&amp;#10;recording_thread = threading.Thread(target=recorder.record_video)&amp;#10;ppg_thread = threading.Thread(target=ppg_recorder.start)&amp;#10;&amp;#10;&amp;#10;lsl_socket = socket.create_connection((&quot;localhost&quot;, 22345))&amp;#10;if lsl_socket is not None:&amp;#10;    started_recording = True&amp;#10;    print(f&quot;start record: {started_recording}&quot;)&amp;#10;    recording_thread.start()&amp;#10;    ppg_thread.start()&amp;#10;    template_str = os.path.join(&quot;sub-%p&quot;,&quot;sub-%p_task-%b_run-%n.xdf&quot;)&amp;#10;    config_str = f'filename {{root:{root_dir}}} {{template:{template_str}}} {{run:{run}}} {{participant:{participant_id}}} {{task:{task}}}\n'&amp;#10;    print(config_str)&amp;#10;&amp;#10;    lsl_socket.sendall(b&quot;update\n&quot;)&amp;#10;    lsl_socket.sendall(b&quot;select all\n&quot;)&amp;#10;    lsl_socket.sendall(config_str.encode('utf-8'))&amp;#10;    lsl_socket.sendall(b&quot;start\n&quot;)&amp;#10;   &amp;#10;    core.wait(5)&amp;#10;" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
         <Param val="marker_outlet.push_sample([&quot;start&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
@@ -137,31 +137,31 @@
         <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
         <Param val="" valType="code" updates="constant" name="stopVal"/>
         <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
-        <Param val="Welcome!&amp;#10;&amp;#10;In this experiment, you will listen to several different sounds. Once the audio finishes playing, you must sit still and focus on it.  &amp;#10;&amp;#10;Press the space key to start the experiment." valType="str" updates="constant" name="text"/>
+        <Param val="Welcome!&amp;#10;&amp;#10;In this experiment, you will listen to several different sounds. Once the audio finishes playing, you must sit still and focus on it.  &amp;#10;&amp;#10;Click left mouse button to start the experiment." valType="str" updates="constant" name="text"/>
         <Param val="from exp settings" valType="str" updates="None" name="units"/>
         <Param val="" valType="code" updates="None" name="validator"/>
         <Param val="" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
-      <KeyboardComponent name="key_resp" plugin="None">
-        <Param val="'space'" valType="list" updates="constant" name="allowedKeys"/>
-        <Param val="" valType="str" updates="constant" name="correctAns"/>
-        <Param val="" valType="str" updates="None" name="deviceLabel"/>
+      <MouseComponent name="mouse" plugin="None">
+        <Param val="" valType="list" updates="constant" name="clickable"/>
+        <Param val="" valType="list" updates="constant" name="correctAns"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
-        <Param val="True" valType="bool" updates="constant" name="discard previous"/>
         <Param val="" valType="code" updates="None" name="durationEstim"/>
-        <Param val="True" valType="bool" updates="constant" name="forceEndRoutine"/>
-        <Param val="key_resp" valType="code" updates="None" name="name"/>
-        <Param val="press" valType="str" updates="constant" name="registerOn"/>
+        <Param val="any click" valType="str" updates="constant" name="forceEndRoutineOnPress"/>
+        <Param val="mouse" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="constant" name="newClicksOnly"/>
+        <Param val="on click" valType="str" updates="None" name="saveMouseState"/>
+        <Param val="name," valType="list" updates="constant" name="saveParamsClickable"/>
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="None" name="startEstim"/>
         <Param val="time (s)" valType="str" updates="None" name="startType"/>
         <Param val="0.0" valType="code" updates="None" name="startVal"/>
         <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
         <Param val="" valType="code" updates="constant" name="stopVal"/>
-        <Param val="last key" valType="str" updates="constant" name="store"/>
         <Param val="False" valType="bool" updates="constant" name="storeCorrect"/>
-        <Param val="True" valType="bool" updates="constant" name="syncScreenRefresh"/>
-      </KeyboardComponent>
+        <Param val="False" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="mouse onset" valType="str" updates="constant" name="timeRelativeTo"/>
+      </MouseComponent>
     </Routine>
     <Routine name="rest">
       <RoutineSettingsComponent name="rest" plugin="None">
@@ -314,7 +314,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="sound_path = ast_stims[ast_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;current_sound.setSound(sound_path, hamming=True)&amp;#10;marker_outlet.push_sample([f&quot;ast_stim-{name}&quot;])&amp;#10;sound_duration = current_sound.getDuration()&amp;#10;print(f'{name}: {sound_duration}')&amp;#10;if ast_idx &lt; len(ast_stims)-1:&amp;#10;    ast_idx+=1&amp;#10;else:&amp;#10;    ast_idx = 0" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="current_sound.setSound(sound_path, hamming=True)&amp;#10;marker_outlet.push_sample([f&quot;ast_stim-{name}&quot;])&amp;#10;sound_duration = current_sound.getDuration()&amp;#10;print(f'{name}: {sound_duration}')&amp;#10;if ast_idx &lt; len(ast_stims)-1:&amp;#10;    ast_idx+=1&amp;#10;else:&amp;#10;    ast_idx = 0" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -557,7 +557,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="marker_outlet.push_sample([&quot;hlt_prestim&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="sound_path = hlt_stims[hlt_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;marker_outlet.push_sample([f&quot;hlt_prestim-{name}&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -597,6 +597,35 @@
         <Param val="" valType="code" updates="None" name="validator"/>
         <Param val="" valType="list" updates="constant" name="vertices"/>
       </PolygonComponent>
+      <PolygonComponent name="cross_2" plugin="None">
+        <Param val="center" valType="str" updates="constant" name="anchor"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="white" valType="color" updates="constant" name="fillColor"/>
+        <Param val="linear" valType="str" updates="constant" name="interpolate"/>
+        <Param val="white" valType="color" updates="constant" name="lineColor"/>
+        <Param val="1" valType="num" updates="constant" name="lineWidth"/>
+        <Param val="4" valType="int" updates="constant" name="nVertices"/>
+        <Param val="cross_2" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="cross" valType="str" updates="None" name="shape"/>
+        <Param val="(0.3, 0.3)" valType="list" updates="constant" name="size"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="$hlt_prestim_duration" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="list" updates="constant" name="vertices"/>
+      </PolygonComponent>
     </Routine>
     <Routine name="hlt_stim">
       <RoutineSettingsComponent name="hlt_stim" plugin="None">
@@ -621,7 +650,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="sound_path = hlt_stims[hlt_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;hlt_sound.setSound(sound_path, hamming=True)&amp;#10;marker_outlet.push_sample([f&quot;hlt_stim-{name}&quot;])&amp;#10;sound_duration = current_sound.getDuration()&amp;#10;print(f'{name}: {sound_duration}')&amp;#10;if hlt_idx &lt; len(hlt_stims)-1:&amp;#10;    hlt_idx+=1&amp;#10;else:&amp;#10;    hlt_idx = 0" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="hlt_sound.setSound(sound_path, hamming=True)&amp;#10;marker_outlet.push_sample([f&quot;hlt_stim-{name}&quot;])&amp;#10;sound_duration = current_sound.getDuration()&amp;#10;print(f'{name}: {sound_duration}')&amp;#10;if hlt_idx &lt; len(hlt_stims)-1:&amp;#10;    hlt_idx+=1&amp;#10;else:&amp;#10;    hlt_idx = 0" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -706,6 +735,35 @@
         <Param val="" valType="code" updates="None" name="validator"/>
         <Param val="" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
+      <PolygonComponent name="cross_5" plugin="None">
+        <Param val="center" valType="str" updates="constant" name="anchor"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="white" valType="color" updates="constant" name="fillColor"/>
+        <Param val="linear" valType="str" updates="constant" name="interpolate"/>
+        <Param val="white" valType="color" updates="constant" name="lineColor"/>
+        <Param val="1" valType="num" updates="constant" name="lineWidth"/>
+        <Param val="4" valType="int" updates="constant" name="nVertices"/>
+        <Param val="cross_5" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="cross" valType="str" updates="None" name="shape"/>
+        <Param val="(0.3, 0.3)" valType="list" updates="constant" name="size"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="$hlt_prestim_duration" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="list" updates="constant" name="vertices"/>
+      </PolygonComponent>
     </Routine>
     <Routine name="hlt_poststim">
       <RoutineSettingsComponent name="hlt_poststim" plugin="None">
@@ -770,6 +828,35 @@
         <Param val="" valType="code" updates="None" name="validator"/>
         <Param val="" valType="list" updates="constant" name="vertices"/>
       </PolygonComponent>
+      <PolygonComponent name="cross_6" plugin="None">
+        <Param val="center" valType="str" updates="constant" name="anchor"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="white" valType="color" updates="constant" name="fillColor"/>
+        <Param val="linear" valType="str" updates="constant" name="interpolate"/>
+        <Param val="white" valType="color" updates="constant" name="lineColor"/>
+        <Param val="1" valType="num" updates="constant" name="lineWidth"/>
+        <Param val="4" valType="int" updates="constant" name="nVertices"/>
+        <Param val="cross_6" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="cross" valType="str" updates="None" name="shape"/>
+        <Param val="(0.3, 0.3)" valType="list" updates="constant" name="size"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="$hlt_prestim_duration" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="list" updates="constant" name="vertices"/>
+      </PolygonComponent>
     </Routine>
     <Routine name="let_prestim">
       <RoutineSettingsComponent name="let_prestim" plugin="None">
@@ -794,7 +881,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="marker_outlet.push_sample([&quot;let_prestim&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="sound_path = let_stims[let_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;marker_outlet.push_sample([f&quot;let_prestim-{name}&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -858,7 +945,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="sound_path = let_stims[let_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;let_sound.setSound(sound_path, hamming=True)&amp;#10;marker_outlet.push_sample([f&quot;let_stim-{name}&quot;])&amp;#10;sound_duration = current_sound.getDuration()&amp;#10;print(f'{name}: {sound_duration}')&amp;#10;if let_idx &lt; len(let_stims)-1:&amp;#10;    let_idx+=1&amp;#10;else:&amp;#10;    let_idx = 0" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="let_sound.setSound(sound_path, hamming=True)&amp;#10;marker_outlet.push_sample([f&quot;let_stim-{name}&quot;])&amp;#10;sound_duration = current_sound.getDuration()&amp;#10;print(f'{name}: {sound_duration}')&amp;#10;if let_idx &lt; len(let_stims)-1:&amp;#10;    let_idx+=1&amp;#10;else:&amp;#10;    let_idx = 0" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -1223,7 +1310,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="marker_outlet.push_sample([&quot;hlt_response&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="marker_outlet.push_sample([f&quot;hlt_response-{name}&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -1294,7 +1381,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="marker_outlet.push_sample([&quot;let_response&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="marker_outlet.push_sample([f&quot;let_response-{name}&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -1365,7 +1452,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="marker_outlet.push_sample([&quot;ast_prestim&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="sound_path = ast_stims[ast_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;marker_outlet.push_sample([f&quot;ast_prestim-name&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
@@ -1406,6 +1493,201 @@
         <Param val="" valType="list" updates="constant" name="vertices"/>
       </PolygonComponent>
     </Routine>
+    <Routine name="hlt_welcome">
+      <RoutineSettingsComponent name="hlt_welcome" plugin="None">
+        <Param val="none" valType="str" updates="None" name="backgroundFit"/>
+        <Param val="" valType="str" updates="None" name="backgroundImg"/>
+        <Param val="$[0,0,0]" valType="color" updates="None" name="color"/>
+        <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+        <Param val="" valType="str" updates="constant" name="desc"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
+        <Param val="hlt_welcome" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="constant" name="skipIf"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
+      </RoutineSettingsComponent>
+      <TextComponent name="text" plugin="None">
+        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="None" valType="str" updates="constant" name="flip"/>
+        <Param val="Open Sans" valType="str" updates="constant" name="font"/>
+        <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
+        <Param val="0.05" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="text" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="Next module is Hearing Loudness Test (HLT)&amp;#10;&amp;#10;{Module description comes here}&amp;#10;&amp;#10;Click left mouse button to start the experiment." valType="str" updates="constant" name="text"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="num" updates="constant" name="wrapWidth"/>
+      </TextComponent>
+      <MouseComponent name="mouse_2" plugin="None">
+        <Param val="" valType="list" updates="constant" name="clickable"/>
+        <Param val="" valType="list" updates="constant" name="correctAns"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="any click" valType="str" updates="constant" name="forceEndRoutineOnPress"/>
+        <Param val="mouse_2" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="constant" name="newClicksOnly"/>
+        <Param val="on click" valType="str" updates="None" name="saveMouseState"/>
+        <Param val="name," valType="list" updates="constant" name="saveParamsClickable"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="constant" name="storeCorrect"/>
+        <Param val="False" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="mouse onset" valType="str" updates="constant" name="timeRelativeTo"/>
+      </MouseComponent>
+    </Routine>
+    <Routine name="let_welcome">
+      <RoutineSettingsComponent name="let_welcome" plugin="None">
+        <Param val="none" valType="str" updates="None" name="backgroundFit"/>
+        <Param val="" valType="str" updates="None" name="backgroundImg"/>
+        <Param val="$[0,0,0]" valType="color" updates="None" name="color"/>
+        <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+        <Param val="" valType="str" updates="constant" name="desc"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
+        <Param val="let_welcome" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="constant" name="skipIf"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
+      </RoutineSettingsComponent>
+      <TextComponent name="text_6" plugin="None">
+        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="None" valType="str" updates="constant" name="flip"/>
+        <Param val="Open Sans" valType="str" updates="constant" name="font"/>
+        <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
+        <Param val="0.05" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="text_6" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="Next module is Listening Effort Test (LET)&amp;#10;&amp;#10;{Module description comes here}&amp;#10;&amp;#10;Click left mouse button to start the experiment." valType="str" updates="constant" name="text"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="num" updates="constant" name="wrapWidth"/>
+      </TextComponent>
+      <MouseComponent name="mouse_3" plugin="None">
+        <Param val="" valType="list" updates="constant" name="clickable"/>
+        <Param val="" valType="list" updates="constant" name="correctAns"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="any click" valType="str" updates="constant" name="forceEndRoutineOnPress"/>
+        <Param val="mouse_3" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="constant" name="newClicksOnly"/>
+        <Param val="on click" valType="str" updates="None" name="saveMouseState"/>
+        <Param val="name," valType="list" updates="constant" name="saveParamsClickable"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="constant" name="storeCorrect"/>
+        <Param val="False" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="mouse onset" valType="str" updates="constant" name="timeRelativeTo"/>
+      </MouseComponent>
+    </Routine>
+    <Routine name="ast_welcome">
+      <RoutineSettingsComponent name="ast_welcome" plugin="None">
+        <Param val="none" valType="str" updates="None" name="backgroundFit"/>
+        <Param val="" valType="str" updates="None" name="backgroundImg"/>
+        <Param val="$[0,0,0]" valType="color" updates="None" name="color"/>
+        <Param val="rgb" valType="str" updates="None" name="colorSpace"/>
+        <Param val="" valType="str" updates="constant" name="desc"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="False" valType="code" updates="None" name="forceNonSlip"/>
+        <Param val="ast_welcome" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="constant" name="skipIf"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="None" name="useWindowParams"/>
+      </RoutineSettingsComponent>
+      <TextComponent name="text_7" plugin="None">
+        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
+        <Param val="1" valType="num" updates="constant" name="contrast"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="False" valType="code" updates="constant" name="draggable"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="None" valType="str" updates="constant" name="flip"/>
+        <Param val="Open Sans" valType="str" updates="constant" name="font"/>
+        <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
+        <Param val="0.05" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="text_7" valType="code" updates="None" name="name"/>
+        <Param val="" valType="num" updates="constant" name="opacity"/>
+        <Param val="0" valType="num" updates="constant" name="ori"/>
+        <Param val="(0, 0)" valType="list" updates="constant" name="pos"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="Next module is Aversion Sound Test (AST)&amp;#10;&amp;#10;{Module description comes here}&amp;#10;&amp;#10;Click left mouse button to start the experiment." valType="str" updates="constant" name="text"/>
+        <Param val="from exp settings" valType="str" updates="None" name="units"/>
+        <Param val="" valType="code" updates="None" name="validator"/>
+        <Param val="" valType="num" updates="constant" name="wrapWidth"/>
+      </TextComponent>
+      <MouseComponent name="mouse_4" plugin="None">
+        <Param val="" valType="list" updates="constant" name="clickable"/>
+        <Param val="" valType="list" updates="constant" name="correctAns"/>
+        <Param val="False" valType="bool" updates="None" name="disabled"/>
+        <Param val="" valType="code" updates="None" name="durationEstim"/>
+        <Param val="any click" valType="str" updates="constant" name="forceEndRoutineOnPress"/>
+        <Param val="mouse_4" valType="code" updates="None" name="name"/>
+        <Param val="True" valType="bool" updates="constant" name="newClicksOnly"/>
+        <Param val="on click" valType="str" updates="None" name="saveMouseState"/>
+        <Param val="name," valType="list" updates="constant" name="saveParamsClickable"/>
+        <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
+        <Param val="" valType="code" updates="None" name="startEstim"/>
+        <Param val="time (s)" valType="str" updates="None" name="startType"/>
+        <Param val="0.0" valType="code" updates="None" name="startVal"/>
+        <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
+        <Param val="" valType="code" updates="constant" name="stopVal"/>
+        <Param val="False" valType="bool" updates="constant" name="storeCorrect"/>
+        <Param val="False" valType="bool" updates="None" name="syncScreenRefresh"/>
+        <Param val="mouse onset" valType="str" updates="constant" name="timeRelativeTo"/>
+      </MouseComponent>
+    </Routine>
   </Routines>
   <Flow>
     <Routine name="welcome"/>
@@ -1424,6 +1706,7 @@
     <Routine name="pmt_stim"/>
     <Routine name="pmt_poststim"/>
     <LoopTerminator name="trials_pmt"/>
+    <Routine name="hlt_welcome"/>
     <LoopInitiator loopType="TrialHandler" name="trials_hlt">
       <Param name="Selected rows" updates="None" val="" valType="str"/>
       <Param name="conditions" updates="None" val="None" valType="str"/>
@@ -1440,6 +1723,7 @@
     <Routine name="hlt_poststim"/>
     <Routine name="hlt_response"/>
     <LoopTerminator name="trials_hlt"/>
+    <Routine name="let_welcome"/>
     <LoopInitiator loopType="TrialHandler" name="trials_let">
       <Param name="Selected rows" updates="None" val="" valType="str"/>
       <Param name="conditions" updates="None" val="None" valType="str"/>
@@ -1456,6 +1740,7 @@
     <Routine name="let_poststim"/>
     <Routine name="let_response"/>
     <LoopTerminator name="trials_let"/>
+    <Routine name="ast_welcome"/>
     <LoopInitiator loopType="TrialHandler" name="trials_ast">
       <Param name="Selected rows" updates="None" val="" valType="str"/>
       <Param name="conditions" updates="None" val="None" valType="str"/>

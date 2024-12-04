@@ -19,44 +19,24 @@ test:
   stimuli_repeat: 1
   stimulus_dration: 4
   response_duration: 4
-  rest_range: [2, 3]
+  rest_range: [2, 3] 
 hearing:
-  prestim: &prestim_value 5
-  stim: &stim_value 2
-  poststim: &poststim_value 5
-  pmt_prestim: *prestim_value
-  pmt_stim: *stim_value
-  pmt_poststim: *poststim_value
-  pmt_trials: 5
-  hlt_prestim : *prestim_value
-  hlt_stim: *stim_value
-  hlt_poststim: *poststim_value
-  hlt_trials: 5
-  let_prestim : *prestim_value
-  let_stim: *stim_value
-  let_poststim: *poststim_value
-  let_trials: 5
-  ast_prestim: *prestim_value
-  ast_stim: *stim_value
-  ast_poststim: *poststim_value
-  ast_trials: 5 
-test_hearing:
   prestim: &prestim_value 1
   stim: &stim_value 2
   poststim: &poststim_value 1
   pmt_prestim: *prestim_value
   pmt_stim: *stim_value
   pmt_poststim: *poststim_value
-  pmt_trials: 1
+  pmt_trials: 2
   hlt_prestim : *prestim_value
   hlt_stim: *stim_value
   hlt_poststim: *poststim_value
-  hlt_trials: 1
+  hlt_trials: 2
   let_prestim : *prestim_value
   let_stim: *stim_value
   let_poststim: *poststim_value
-  let_trials: 1
+  let_trials: 2
   ast_prestim: *prestim_value
   ast_stim: *stim_value
   ast_poststim: *poststim_value
-  ast_trials: 1
+  ast_trials: 2
