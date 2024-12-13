@@ -45,6 +45,10 @@ class VideoRecorder:
         backend = cv2.CAP_DSHOW if platform.system() == 'Windows' else None
         self.cap = cv2.VideoCapture(self.cam_id, backend)
 
+        if not self.cap.isOpened():
+            print("Error opening video stream")
+            return
+
         fps = self.cap.get(cv2.CAP_PROP_FPS) or self.default_fps
         if self.enable_lsl:
             info = StreamInfo('VideoStream', 'Video', 1, fps,
@@ -172,20 +176,20 @@ class PPGRecorder:
 
 def main():
     parser = argparse.ArgumentParser(description="Record video, PPG, or both.")
-    parser.add_argument('--enable-lsl', action='store_true', default=False)
+    parser.add_argument('--enable-lsl', action='store_true', help="Enable LSL")
     parser.add_argument('--recording-time', type=int, default=5,
                         help="Recording time in seconds")
     parser.add_argument(
         '--record-video', action='store_true', help="Record video")
     parser.add_argument('--cam-id', type=int, default=1, help="Camera ID")
-    parser.add_argument('--display-video', action='store_true', default=True,
-                        help="Display video while recording")
+    parser.add_argument('--display-video', action='store_true',
+                        help="Display video while recording") # display video doesn't work on mac for some reason since it is running on a different thread
 
     parser.add_argument('--record-ppg', action='store_true', help="Record PPG")
     # Additional arguments for PPG recording
     parser.add_argument('--ppg-port', type=str,
                         default="COM5", help="PPG device port")
-    parser.add_argument('--simulate-ppg', action='store_true', default=False,
+    parser.add_argument('--simulate-ppg', action='store_true',
                         help="Simulate PPG data")
 
     args = parser.parse_args()
