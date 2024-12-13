@@ -50,6 +50,7 @@ class VideoRecorder:
             return
 
         fps = self.cap.get(cv2.CAP_PROP_FPS) or self.default_fps
+        print(f"fps: {fps}")
         if self.enable_lsl:
             info = StreamInfo('VideoStream', 'Video', 1, fps,
                               'float32', 'videouid34234')
@@ -94,7 +95,7 @@ class VideoRecorder:
 
 
 class PPGRecorder:
-    def __init__(self, port, baud_rate=9600, enable_lsl=True, simulate_data=False):
+    def __init__(self, port, baud_rate=115200, enable_lsl=True, simulate_data=False):
         self.port = port
         self.baud_rate = baud_rate
         self.enable_lsl = enable_lsl
@@ -148,12 +149,16 @@ class PPGRecorder:
                     if self.enable_lsl:
                         self.ppg_outlet.push_sample([float(signal)])
                 else:
-                    print("No signal received.")
+                    print("Missed a signal")
 
     def read_signal(self):
         try:
             signal = self.ser.readline().decode('utf-8').strip()
-            return signal
+            split_signal = signal.split(" ")
+            value = None
+            if len(split_signal) == 2:
+                value = split_signal[1]
+            return value
         except Exception as e:
             print(f"Error reading signal: {e}")
             return None
