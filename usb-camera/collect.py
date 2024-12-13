@@ -9,6 +9,7 @@ import serial
 import csv
 import random
 import time
+import argparse
 
 
 class VideoRecorder:
@@ -82,6 +83,7 @@ class VideoRecorder:
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
                 else:
+                    print("No frame received.")
                     break
         finally:
             self.release_resources()
@@ -168,30 +170,62 @@ class PPGRecorder:
             print(f"Closed connection to {self.port}")
 
 
-if __name__ == "__main__":
-    recorder = VideoRecorder(
-        cam_id=1, output_path='video.avi', display_video=True, enable_lsl=True)
-    signal.signal(signal.SIGINT, recorder.signal_handler)
-    signal.signal(signal.SIGTERM, recorder.signal_handler)
+def main():
+    parser = argparse.ArgumentParser(description="Record video, PPG, or both.")
+    parser.add_argument('--enable-lsl', action='store_true', default=False)
+    parser.add_argument('--recording-time', type=int, default=5,
+                        help="Recording time in seconds")
+    parser.add_argument(
+        '--record-video', action='store_true', help="Record video")
+    parser.add_argument('--cam-id', type=int, default=1, help="Camera ID")
+    parser.add_argument('--display-video', action='store_true', default=True,
+                        help="Display video while recording")
 
-    ppg_recorder = PPGRecorder(
-        port="COM5", enable_lsl=True, simulate_data=True)
-    signal.signal(signal.SIGINT, ppg_recorder.signal_handler)
-    signal.signal(signal.SIGTERM, ppg_recorder.signal_handler)
+    parser.add_argument('--record-ppg', action='store_true', help="Record PPG")
+    # Additional arguments for PPG recording
+    parser.add_argument('--ppg-port', type=str,
+                        default="COM5", help="PPG device port")
+    parser.add_argument('--simulate-ppg', action='store_true', default=False,
+                        help="Simulate PPG data")
 
-    ppg_thread = threading.Thread(target=ppg_recorder.start)
-    ppg_thread.start()
+    args = parser.parse_args()
+    video_recorder = None
+    video_process = None
+    ppg_recorder = None
+    ppg_thread = None
 
-    # Create and start a process to run the record_video method
-    recording_process = threading.Thread(target=recorder.record_video)
-    recording_process.start()
-    # Example of stopping the recorder after 10 seconds
+    if args.record_video:
+        video_recorder = VideoRecorder(
+            cam_id=args.cam_id, output_path='video.avi', display_video=args.display_video, enable_lsl=args.enable_lsl)
+        signal.signal(signal.SIGINT, video_recorder.signal_handler)
+        signal.signal(signal.SIGTERM, video_recorder.signal_handler)
+
+        video_process = threading.Thread(
+            target=video_recorder.record_video)
+        video_process.start()
+
+    if args.record_ppg:
+        ppg_recorder = PPGRecorder(
+            port=args.ppg_port, enable_lsl=args.enable_lsl, simulate_data=args.simulate_ppg)
+        signal.signal(signal.SIGINT, ppg_recorder.signal_handler)
+        signal.signal(signal.SIGTERM, ppg_recorder.signal_handler)
+
+        ppg_thread = threading.Thread(target=ppg_recorder.start)
+        ppg_thread.start()
+
+    # Example of stopping the recorder after 20 seconds
     try:
-        import time
-        time.sleep(20)
-        recorder.stop()
-        # ppg_recorder.stop()
-        # recording_process.join(timeout=10)
+        time.sleep(args.recording_time)
+        if args.record_video:
+            video_recorder.stop()
+        if args.record_ppg:
+            ppg_recorder.stop()
     except KeyboardInterrupt:
-        recorder.stop()
-        recording_process.join()
+        if args.record_video:
+            video_recorder.stop()
+        if args.record_ppg:
+            ppg_recorder.stop()
+
+
+if __name__ == "__main__":
+    main()
