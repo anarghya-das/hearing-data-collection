@@ -1,8 +1,8 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 This experiment was created using PsychoPy3 Experiment Builder (v2024.2.4),
-    on December 06, 2024, at 13:26
+    on February 13, 2025, at 15:31
 If you publish work using this script the most relevant publication is:
 
     Peirce J, Gray JR, Simpson S, MacAskill M, Höchenberger R, Sogo H, Kastman E, Lindeløv JK. (2019) 
@@ -57,6 +57,7 @@ import pandas as pd
 started_recording = False
 original_quit = core.quit
 lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread = None, None, None, None, None
+end_exp = False
 
 def cleanup():
     global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread
@@ -71,8 +72,53 @@ def cleanup():
             ppg_thread.join()
         started_recording = False
 
+def save_responses():
+    print("Saving Response")
+    processed_data_with_type = []
+    participant = expInfo['participant']
+    exp_date = expInfo['date']
+    path = os.path.join('data',participant,f"{participant}_{expName}_{exp_date}.csv")
+    d = pd.read_csv(path)
+
+    for idx, row in d.iterrows():
+        if not pd.isna(row['current_hlt_stim']):
+            user_value = row['trials_hlt.slider_4.response'] if not pd.isna(row['trials_hlt.slider_4.response']) else "No Value"
+            user_rt = row['slider_4.rt'] if not pd.isna(row['slider_4.rt']) else "No RT"
+            processed_data_with_type.append({
+                "Stim Type": "HLT",
+                "Stim Name": row['current_hlt_stim'],
+                "Repeat Number": int(row['thisRepN']) + 1 if not pd.isna(row['thisRepN']) else None,
+                "User Value": user_value,
+                "User Response Time (s)": f"{user_rt:.3f}"
+            })
+    
+        if not pd.isna(row['current_let_stim']):
+            user_value = row['slider_4.response'] if not pd.isna(row['slider_4.response']) else "No Value"
+            for response_col, rt_col in [('trials_let.slider_5.response', 'slider_5.rt'),
+                                                 ('trials_let.slider_6.response', 'slider_6.rt'),
+                                                 ('trials_let.slider_7.response', 'slider_7.rt')]:
+                if not pd.isna(row[response_col]):
+                    user_value = row[response_col]
+                    user_rt = row[rt_col]
+                    break
+                
+            user_value = user_value if user_value is not None else "No Value"
+            user_rt = user_rt if user_rt is not None else "No RT"
+            processed_data_with_type.append({
+                "Stim Type": "LET",
+                "Stim Name": row['current_let_stim'],
+                "Repeat Number": int(row['thisRepN']) + 1 if not pd.isna(row['thisRepN']) else None,
+                "User Value": user_value,
+                "User Response Time (s)": f"{user_rt:.3f}"
+            })
+        
+    processed_df_with_type = pd.DataFrame(processed_data_with_type)
+    response_path = os.path.join(os.getcwd(),"exp_data",f"sub-{participant}",f'sub-{participant}_responses.csv') 
+    processed_df_with_type.to_csv(response_path, index=False)
+
 def custom_quit():
     cleanup()  # Your cleanup function
+    save_responses()
     original_quit()
 
 def get_audio_files(folder):
@@ -82,7 +128,7 @@ class VideoRecorder:
     def __init__(self, cam_id=0, output_name='output', default_fps=30, display_video=False, enable_lsl=False):
         print("VideoRecorder start.")
         self.cam_id = cam_id
-        self.output_path = os.path.join(os.getcwd(),"input", f"{output_name}.avi")
+        self.output_path = os.path.join(os.getcwd(),"exp_data",f"sub-{output_name}",f"{output_name}.avi")
         self.display_video = display_video
         self.enable_lsl = enable_lsl
         self.cap = None
@@ -151,14 +197,14 @@ class VideoRecorder:
             self.release_resources()
 
 class PPGRecorder:
-    def __init__(self, port, baud_rate=9600, enable_lsl=True, simulate_data=False):
+    def __init__(self, port, baud_rate=115200, enable_lsl=True, simulate_data=False):
         self.port = port
         self.baud_rate = baud_rate
         self.enable_lsl = enable_lsl
         self.simulate_data = simulate_data
         self.ser = None
         self.stop_event = threading.Event()
-        self.sample_rate = 50 # TODO update with actual sampling rate
+        self.sample_rate = 50 
 
         if self.enable_lsl:
             info = StreamInfo('PPGStream', 'PPG', 1, self.sample_rate,
@@ -184,28 +230,26 @@ class PPGRecorder:
         self.stop_event.set()
 
     def record_ppg(self):
-        with open('pulse_data.csv', 'w', newline='') as csvfile:
-            csvwriter = csv.writer(csvfile)
-            csvwriter.writerow(['Datetime', 'Timestamp', 'Signal'])
-
-            print("Logging data. Press 'q' to stop.")
-            while not self.stop_event.is_set():
-                signal = self.read_signal()
-                if signal:
-                    timestamp = time.time()
-                    datetime_str = datetime.fromtimestamp(
-                        timestamp).strftime('%Y-%m-%d %H:%M:%S.%f')
-                    csvwriter.writerow([datetime_str, timestamp, signal])
-
-                    if self.enable_lsl:
-                        self.ppg_outlet.push_sample([float(signal)])
-                else:
-                    print("No signal received.")
+        while not self.stop_event.is_set():
+            signal = self.read_signal()
+            if signal:
+                timestamp = time.time()
+                datetime_str = datetime.fromtimestamp(
+                    timestamp).strftime('%Y-%m-%d %H:%M:%S.%f')
+                    
+                if self.enable_lsl:
+                    self.ppg_outlet.push_sample([float(signal)])
+            else:
+                print("No signal received.")
 
     def read_signal(self):
         try:
             signal = self.ser.readline().decode('utf-8').strip()
-            return signal
+            split_signal = signal.split(" ")
+            value = None
+            if len(split_signal) == 2:
+                value = split_signal[1]
+            return value
         except Exception as e:
             print(f"Error reading signal: {e}")
             return None
@@ -263,8 +307,8 @@ or run the experiment with `--pilot` as an argument. To change what pilot
 # work out from system args whether we are running in pilot mode
 PILOTING = core.setPilotModeFromArgs()
 # start off with values from experiment settings
-_fullScr = False
-_winSize = [1512, 982]
+_fullScr = True
+_winSize = [1920, 1080]
 # if in pilot mode, apply overrides according to preferences
 if PILOTING:
     # force windowed mode
@@ -330,7 +374,7 @@ def setupData(expInfo, dataDir=None):
     thisExp = data.ExperimentHandler(
         name=expName, version='',
         extraInfo=expInfo, runtimeInfo=None,
-        originPath='D:\\projects\\hearing-data-collection\\hearing.py',
+        originPath='C:\\Users\\Leo\\Desktop\\Hearing Study\\hearing-data-collection\\hearing.py',
         savePickle=True, saveWideText=True,
         dataFileName=dataDir + os.sep + filename, sortColumns='time'
     )
@@ -391,10 +435,13 @@ def setupWindow(expInfo=None, win=None):
     psychopy.visual.Window
         Window in which to run this experiment.
     """
+    if PILOTING:
+        logging.debug('Fullscreen settings ignored as running in pilot mode.')
+    
     if win is None:
         # if not given a window to setup, make one
         win = visual.Window(
-            size=_winSize, fullscr=_fullScr, screen=0,
+            size=_winSize, fullscr=_fullScr, screen=1,
             winType='pyglet', allowGUI=True, allowStencil=False,
             monitor='testMonitor', color=[-1.0000, -1.0000, -1.0000], colorSpace='rgb',
             backgroundImage='', backgroundFit='none',
@@ -633,10 +680,10 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     print("creating additional modalitiy recorders: PPG and Video")
     global started_recording, lsl_socket, recorder, ppg_recorder, recording_thread, ppg_thread
     if enable_video:
-        recorder = VideoRecorder(cam_id=1, output_name=participant_id, display_video=False, enable_lsl=True)
+        recorder = VideoRecorder(cam_id=0, output_name=participant_id, display_video=False, enable_lsl=True)
         recording_thread = threading.Thread(target=recorder.record_video)
     if enable_ppg:
-        ppg_recorder = PPGRecorder(port="COM4", enable_lsl=True, simulate_data=True)
+        ppg_recorder = PPGRecorder(port="COM4", enable_lsl=True, simulate_data=False)
         ppg_thread = threading.Thread(target=ppg_recorder.start)
     
     lsl_socket = socket.create_connection(("localhost", 22345))
@@ -944,6 +991,15 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         lineWidth=1.0,
         colorSpace='rgb', lineColor='white', fillColor='white',
         opacity=None, depth=-2.0, interpolate=True)
+    
+    # --- Initialize components for Routine "end_2" ---
+    text_end = visual.TextStim(win=win, name='text_end',
+        text='The experiment has ended, thank you for participating!\n\nClick the left mouse button to exit.',
+        font='Open Sans',
+        pos=(0, 0), draggable=False, height=0.05, wrapWidth=None, ori=0.0, 
+        color='white', colorSpace='rgb', opacity=None, 
+        languageStyle='LTR',
+        depth=-1.0);
     
     # create some handy timers
     
@@ -3834,53 +3890,118 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     if thisSession is not None:
         # if running in a Session with a Liaison client, send data up to now
         thisSession.sendExperimentData()
-    # Run 'End Experiment' code from code_init
-    marker_outlet.push_sample(["end"])
-    core.wait(1)
-    lsl_socket.sendall(b"stop\n")
     
-    print("Saving Response")
-    processed_data_with_type = []
-    participant = expInfo['participant']
-    exp_date = expInfo['date']
-    path = os.path.join('data',participant,f"{participant}_{expName}_{exp_date}.csv")
-    d = pd.read_csv(path)
+    # --- Prepare to start Routine "end_2" ---
+    # create an object to store info about Routine end_2
+    end_2 = data.Routine(
+        name='end_2',
+        components=[text_end],
+    )
+    end_2.status = NOT_STARTED
+    continueRoutine = True
+    # update component parameters for each repeat
+    # Run 'Begin Routine' code from code_14
+    if not end_exp:
+        marker_outlet.push_sample(["end"])
+        core.wait(1)
+        lsl_socket.sendall(b"stop\n")
+        end_exp = True
+    # store start times for end_2
+    end_2.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
+    end_2.tStart = globalClock.getTime(format='float')
+    end_2.status = STARTED
+    thisExp.addData('end_2.started', end_2.tStart)
+    end_2.maxDuration = None
+    # keep track of which components have finished
+    end_2Components = end_2.components
+    for thisComponent in end_2.components:
+        thisComponent.tStart = None
+        thisComponent.tStop = None
+        thisComponent.tStartRefresh = None
+        thisComponent.tStopRefresh = None
+        if hasattr(thisComponent, 'status'):
+            thisComponent.status = NOT_STARTED
+    # reset timers
+    t = 0
+    _timeToFirstFrame = win.getFutureFlipTime(clock="now")
+    frameN = -1
     
-    for idx, row in d.iterrows():
-        if not pd.isna(row['current_hlt_stim']):
-            user_value = row['trials_hlt.slider_4.response'] if not pd.isna(row['trials_hlt.slider_4.response']) else "No Value"
-            user_rt = row['slider_4.rt'] if not pd.isna(row['slider_4.rt']) else "No RT"
-            processed_data_with_type.append({
-                "Stim Type": "HLT",
-                "Stim Name": row['current_hlt_stim'],
-                "Repeat Number": int(row['thisRepN']) + 1 if not pd.isna(row['thisRepN']) else None,
-                "User Value": user_value,
-                "User Response Time (s)": f"{user_rt:.3f}"
-            })
+    # --- Run Routine "end_2" ---
+    end_2.forceEnded = routineForceEnded = not continueRoutine
+    while continueRoutine:
+        # get current time
+        t = routineTimer.getTime()
+        tThisFlip = win.getFutureFlipTime(clock=routineTimer)
+        tThisFlipGlobal = win.getFutureFlipTime(clock=None)
+        frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
+        # update/draw components on each frame
         
-        if not pd.isna(row['current_let_stim']):
-            user_value = row['slider_4.response'] if not pd.isna(row['slider_4.response']) else "No Value"
-            for response_col, rt_col in [('trials_let.slider_5.response', 'slider_5.rt'),
-                                                 ('trials_let.slider_6.response', 'slider_6.rt'),
-                                                 ('trials_let.slider_7.response', 'slider_7.rt')]:
-                if not pd.isna(row[response_col]):
-                    user_value = row[response_col]
-                    user_rt = row[rt_col]
-                    break
-                
-            user_value = user_value if user_value is not None else "No Value"
-            user_rt = user_rt if user_rt is not None else "No RT"
-            processed_data_with_type.append({
-                "Stim Type": "LET",
-                "Stim Name": row['current_let_stim'],
-                "Repeat Number": int(row['thisRepN']) + 1 if not pd.isna(row['thisRepN']) else None,
-                "User Value": user_value,
-                "User Response Time (s)": f"{user_rt:.3f}"
-            })
-            
-    processed_df_with_type = pd.DataFrame(processed_data_with_type)
-    response_path = os.path.join(os.getcwd(),"exp_data",participant,f'{participant}_response.csv') 
-    processed_df_with_type.to_csv(response_path, index=False)
+        # *text_end* updates
+        
+        # if text_end is starting this frame...
+        if text_end.status == NOT_STARTED and tThisFlip >= 0.0-frameTolerance:
+            # keep track of start time/frame for later
+            text_end.frameNStart = frameN  # exact frame index
+            text_end.tStart = t  # local t and not account for scr refresh
+            text_end.tStartRefresh = tThisFlipGlobal  # on global time
+            win.timeOnFlip(text_end, 'tStartRefresh')  # time at next scr refresh
+            # update status
+            text_end.status = STARTED
+            text_end.setAutoDraw(True)
+        
+        # if text_end is active this frame...
+        if text_end.status == STARTED:
+            # update params
+            pass
+        
+        # check for quit (typically the Esc key)
+        if defaultKeyboard.getKeys(keyList=["escape"]):
+            thisExp.status = FINISHED
+        if thisExp.status == FINISHED or endExpNow:
+            endExperiment(thisExp, win=win)
+            return
+        # pause experiment here if requested
+        if thisExp.status == PAUSED:
+            pauseExperiment(
+                thisExp=thisExp, 
+                win=win, 
+                timers=[routineTimer], 
+                playbackComponents=[]
+            )
+            # skip the frame we paused on
+            continue
+        
+        # check if all components have finished
+        if not continueRoutine:  # a component has requested a forced-end of Routine
+            end_2.forceEnded = routineForceEnded = True
+            break
+        continueRoutine = False  # will revert to True if at least one component still running
+        for thisComponent in end_2.components:
+            if hasattr(thisComponent, "status") and thisComponent.status != FINISHED:
+                continueRoutine = True
+                break  # at least one component has not yet finished
+        
+        # refresh the screen
+        if continueRoutine:  # don't flip if this routine is over or we'll get a blank screen
+            win.flip()
+    
+    # --- Ending Routine "end_2" ---
+    for thisComponent in end_2.components:
+        if hasattr(thisComponent, "setAutoDraw"):
+            thisComponent.setAutoDraw(False)
+    # store stop times for end_2
+    end_2.tStop = globalClock.getTime(format='float')
+    end_2.tStopRefresh = tThisFlipGlobal
+    thisExp.addData('end_2.stopped', end_2.tStop)
+    thisExp.nextEntry()
+    # the Routine "end_2" was not non-slip safe, so reset the non-slip timer
+    routineTimer.reset()
+    # Run 'End Experiment' code from code_init
+    if not end_exp:
+        marker_outlet.push_sample(["end"])
+        core.wait(1)
+        lsl_socket.sendall(b"stop\n")
+        end_exp = True
     
     # mark experiment as finished
     endExperiment(thisExp, win=win)
