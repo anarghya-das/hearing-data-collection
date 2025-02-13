@@ -5,6 +5,7 @@ Experiment and configuration files for PsychoPy incorporating the Lab Streaming 
 ## Pre-Requisites 
 - Setup the Recording Environment by following [this guide](https://docs.google.com/document/d/1NA2v7Z6gLFAqDksrsyBf3V2RNZ6RxAdAVVEvcNDk-yA/edit?usp=sharing)
 - Read through the [data collection protocol](https://docs.google.com/document/d/1ouoUjMdvXaoEwp-7u0hbgPy1gG8JQRklimvL0BNJeHc/edit?usp=sharing) for this experiment
+- [Updated Setup](https://docs.google.com/document/d/1rhVqhTrDCe6JzxTdRydFx3ycqmDQtdOv-aFe-VhdEWo/edit?usp=sharing)
 
 ## Repository Structure
 
