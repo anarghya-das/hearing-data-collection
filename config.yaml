@@ -1,25 +1,21 @@
 task: "hearing"
-eeg:
-  sound_files: ["babycry", "chewing", "engine", "seawave", "typing"]
-  baseline_duration: 15
-  stimuli_repeat: 5
-  stimulus_dration: 4
-  response_duration: 5
-  rest_range: [6, 8]
-fnirs:
-  sound_files: ["babycry", "chewing", "engine", "seawave", "typing"]
-  baseline_duration: 30
-  stimuli_repeat: 3
-  stimulus_dration: 4
-  response_duration: 6
-  rest_range: [8, 12]
 test:
-  sound_files: ["babycry", "seawave"]
-  baseline_duration: 5
-  stimuli_repeat: 1
-  stimulus_dration: 4
-  response_duration: 4
-  rest_range: [2, 3] 
+  pmt_prestim: 1
+  pmt_stim: 1
+  pmt_poststim: 1
+  pmt_trials: 1
+  hlt_prestim : 1
+  hlt_stim: 1
+  hlt_poststim: 1
+  hlt_trials: 1
+  let_prestim : 1
+  let_stim: 1
+  let_poststim: 1
+  let_trials: 1
+  ast_prestim: 1
+  ast_stim: 5
+  ast_poststim: 1
+  ast_trials: 1
 hearing:
   prestim: &prestim_value 5
   stim: &stim_value 2
@@ -37,6 +33,6 @@ hearing:
   let_poststim: *poststim_value
   let_trials: 5
   ast_prestim: *prestim_value
-  ast_stim: *stim_value
+  ast_stim: 5
   ast_poststim: *poststim_value
   ast_trials: 5
