@@ -8,7 +8,7 @@
     <Param val="u'data/%s/%s_%s_%s' % (expInfo['participant'],expInfo['participant'], expName, expInfo['date'])" valType="code" updates="None" name="Data filename"/>
     <Param val="True" valType="bool" updates="None" name="Enable Escape"/>
     <Param val="" valType="str" updates="None" name="End Message"/>
-    <Param val="{'participant': 'f&quot;{randint(0, 999999):06.0f}&quot;', 'run': '1', 'config': 'hearing', 'enable_video': 'true', 'enable_ppg': 'true'}" valType="code" updates="None" name="Experiment info"/>
+    <Param val="{'participant': 'f&quot;{randint(0, 999999):06.0f}&quot;', 'run': '1', 'config': 'hearing', 'enable_video': 'true', 'enable_ppg': 'false'}" valType="code" updates="None" name="Experiment info"/>
     <Param val="True" valType="bool" updates="None" name="Force stereo"/>
     <Param val="True" valType="bool" updates="None" name="Full-screen window"/>
     <Param val="" valType="str" updates="None" name="HTML path"/>
@@ -1760,7 +1760,7 @@
         <Param val="" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
-        <Param val="sound_path = ast_stims[ast_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;marker_outlet.push_sample([f&quot;ast_prestim-name&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
+        <Param val="sound_path = ast_stims[ast_idx]&amp;#10;name = os.path.basename(sound_path).split('.')[0]&amp;#10;marker_outlet.push_sample([f&quot;ast_prestim-{name}&quot;])" valType="extendedCode" updates="constant" name="Begin Routine"/>
         <Param val="Py" valType="str" updates="None" name="Code Type"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each Frame"/>
         <Param val="" valType="extendedCode" updates="constant" name="Each JS Frame"/>
