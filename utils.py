@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+import glob
 import numpy as np
 import os
 import mne
@@ -44,12 +46,30 @@ def closest_points_vector(eeg_timestamps, marker_timestamps):
 
 
 def create_mappings(event_names, prefix):
-    marker_dict = {p: i for i, p in enumerate(
-        np.unique(event_names))}
+    marker_dict = {p: i for i, p in enumerate(np.unique(event_names))}
     id_binding = {v: k for k, v in marker_dict.items()}
-    category_mapping = {
-        p: {k: v for k, v in marker_dict.items() if k.startswith(p)} for p in prefix
-    }
+    category_mapping = {}
+    for p in prefix:
+        # All keys for this prefix
+        sub_map = {k: v for k, v in marker_dict.items() if k.startswith(p)}
+        # Special handling for 'ast_stim'
+        if p == 'ast_stim':
+            # Separate keys containing 'control' from others, store as dicts
+            stim_keys = list(sub_map.keys())
+            ast_stim_map = {
+                'trigger': {},
+                'neutral': {},
+                'all': {}
+            }
+            for key in stim_keys:
+                ast_stim_map['all'][key] = sub_map[key]
+                if 'control' in key.lower():
+                    ast_stim_map['neutral'][key] = sub_map[key]
+                else:
+                    ast_stim_map['trigger'][key] = sub_map[key]
+            category_mapping[p] = ast_stim_map
+        else:
+            category_mapping[p] = sub_map
     return marker_dict, id_binding, category_mapping
 
 
@@ -75,21 +95,26 @@ def create_mne(eeg_stream, events, id_binding,
         ch_names=ch_labels, sfreq=sampling_rate, ch_types='eeg')
     raw = mne.io.RawArray(eeg_data, info)
 
-    flat_voltage *= 1e-6  # Flat voltage threshold in Volts
-    _, bads = mne.preprocessing.annotate_amplitude(
-        raw, flat=dict(eeg=flat_voltage))
-    raw.info['bads'] = bads
-    print(f"Bad channels: {bads}")
+    if flat_voltage != None:
+        flat_voltage *= 1e-6  # Flat voltage threshold in Volts
+        _, bads = mne.preprocessing.annotate_amplitude(
+            raw, flat=dict(eeg=flat_voltage))
+        raw.info['bads'] = bads
+        print(f"Bad channels: {bads}")
+
     # raw.interpolate_bads()
     annot = mne.annotations_from_events(
         events, raw.info['sfreq'], id_binding)
     raw.set_annotations(annot)
 
-    # raw.set_montage(montage)  # Set the montage to the raw object
-    # raw.plot_psd(fmax=62)
+    if notch_freq is not None:
+        raw = raw.notch_filter(
+            np.arange(notch_freq, sampling_rate/2, notch_freq), picks='eeg')
 
-    raw = raw.notch_filter(notch_freq)
-    raw = raw.filter(l_freq=bandpass['low'], h_freq=bandpass['high'])
+    # raw.set_montage(montage)  # Set the montage to the raw object
+    if bandpass != None:
+        raw = raw.filter(l_freq=bandpass['low'], h_freq=bandpass['high'])
+        raw = raw.set_eeg_reference('average')
     return raw
 
 
@@ -110,7 +135,7 @@ def parse_xdf(file_path, eeg_stream_name='obci_eeg1'):
     return marker_data, eeg_stream, eeg_insert_points
 
 
-def get_event_names(files, prefix='ast_stim'):
+def get_event_names(files, prefix='ast_stim', exclude_participants=[]):
     """
     Extracts event names from marker data that start with a given prefix.
     Returns:
@@ -121,6 +146,8 @@ def get_event_names(files, prefix='ast_stim'):
     all_names = []
     for file in files:
         participant_number = file.split(os.sep)[2]
+        if participant_number in exclude_participants:
+            continue
         participant_id = file.split(os.sep)[-1].split('_')[0]
         marker_data, _, _ = parse_xdf(file)
         names = {str(f) for f in np.unique(marker_data)
@@ -135,7 +162,8 @@ def get_event_names(files, prefix='ast_stim'):
     return name_mapping, common_names
 
 
-def read_data(file_path, eeg_stream_name='obci_eeg1', bindings=None):
+def read_data(file_path, eeg_stream_name='obci_eeg1', bindings=None,
+              bandpass={'low': 1, 'high': 50}, flat_voltage=0.1):
     marker_data, eeg_stream, eeg_insert_points = parse_xdf(
         file_path, eeg_stream_name)
     # Create MNE events from the marker data
@@ -144,6 +172,105 @@ def read_data(file_path, eeg_stream_name='obci_eeg1', bindings=None):
     marker_dict, id_binding, category_mapping = create_mappings(
         marker_data, bindings)
     events = create_events(eeg_insert_points, marker_dict, marker_data)
-    raw = create_mne(eeg_stream, events, id_binding)
+    raw = create_mne(eeg_stream, events, id_binding,
+                     bandpass=bandpass, flat_voltage=flat_voltage)
     return raw, events, category_mapping
     # return eeg_stream, events, id_binding, category_mapping
+
+
+def calculate_power_spectrum(epoch, method='multitaper', fmin=1, fmax=20):
+    """Calculate power spectrum for given epochs."""
+    psd = epoch.compute_psd(method=method, fmin=fmin, fmax=fmax)
+    power, freqs = psd.get_data(return_freqs=True)
+    # if compute_method == 'wavelet':
+    #     freqs = np.logspace(*np.log10([fmin, fmax]), num=8)
+    #     n_cycles = freqs / 2.0  # different number of cycle per frequency
+    #     power, itc = epoch.compute_tfr(
+    #         method="morlet",
+    #         freqs=freqs,
+    #         n_cycles=n_cycles,
+    #         average=True,
+    #         return_itc=True,
+    #         decim=3,
+    #     )
+    return power, freqs
+
+
+def plot_power_spectrum(power, freq, average_axis=(0, 1), title='Power Spectrum'):
+    print(f"Power shape: {power.shape}, Frequency shape: {freq.shape}")
+    bands = {
+        'delta': (freq[0], 4, 'blue'),
+        'theta': (4, 8, 'green'),
+        'alpha': (8, 13, 'orange'),
+        'beta': (13, 30, 'red'),
+        'gamma': (30, freq[-1], 'purple')
+    }
+    mean_power = power.mean(axis=average_axis)
+
+    fig = plt.figure(figsize=(10, 6))
+    for band, (low, high, color) in bands.items():
+        idx = np.where((freq >= low) & (freq < high))[0]
+        if len(idx) > 0:
+            plt.fill_between(freq[idx], mean_power[idx],
+                             color=color, alpha=0.5, label=band.capitalize())
+
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Power (dB)')
+    plt.title('Power Spectrum by Frequency Band')
+    plt.xlim(0, 50)
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+
+    return fig
+
+
+def compute_band_ratios(power, freqs, bands={
+    'delta': (1, 4),
+    'theta': (4, 8),
+    'alpha': (8, 13),
+    'beta': (13, 30),
+    'gamma': (30, 50)
+}):
+    """
+    Compute normalized average power per band per channel for PSD data.
+    power: shape (n_epochs, n_channels, n_freqs)
+    freqs: shape (n_freqs,)
+    Returns: dict of band -> array of shape (n_channels,)
+    """
+
+    # Get frequency indices for each band
+    band_indices = {
+        band: np.where((freqs >= low) & (freqs < high))[0]
+        for band, (low, high) in bands.items()
+    }
+
+    # Average power over epochs: shape (n_channels, n_freqs)
+    mean_power = power.mean(axis=0)
+
+    # Calculate normalized average power per band per channel
+    band_power_norm = {}
+    for band, idxs in band_indices.items():
+        band_power_norm[band] = []
+        for ch in range(mean_power.shape[0]):
+            data = mean_power[ch]
+            # Normalize the PSD for this channel
+            data_norm = (data - data.min()) / (data.max() - data.min() + 1e-12)
+            # Average over band freqs
+            band_avg = data_norm[idxs].mean()
+            band_power_norm[band].append(band_avg)
+        band_power_norm[band] = np.array(band_power_norm[band])
+
+    return band_power_norm
+
+
+if __name__ == "__main__":
+    exp_path = os.path.join("exp_data", "02_Experimental")
+    control_path = os.path.join("exp_data", "01_Control")
+    glob_pattern = os.path.join("**", "*.xdf")
+
+    exp_files = glob.glob(os.path.join(exp_path, glob_pattern), recursive=True)
+    control_files = glob.glob(os.path.join(
+        control_path, glob_pattern), recursive=True)[:6]
+# CTRL03-sub-129059-old error
+    read_data(exp_files[0])
