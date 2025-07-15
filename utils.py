@@ -52,22 +52,26 @@ def create_mappings(event_names, prefix):
     for p in prefix:
         # All keys for this prefix
         sub_map = {k: v for k, v in marker_dict.items() if k.startswith(p)}
-        # Special handling for 'ast_stim'
-        if p == 'ast_stim':
+        # Special handling for 'ast'
+        if p == 'ast':
             # Separate keys containing 'control' from others, store as dicts
-            stim_keys = list(sub_map.keys())
-            ast_stim_map = {
-                'trigger': {},
-                'neutral': {},
-                'all': {}
-            }
-            for key in stim_keys:
-                ast_stim_map['all'][key] = sub_map[key]
-                if 'control' in key.lower():
-                    ast_stim_map['neutral'][key] = sub_map[key]
-                else:
-                    ast_stim_map['trigger'][key] = sub_map[key]
-            category_mapping[p] = ast_stim_map
+            ast_prefix = {'prestim', 'stim', 'poststim'}
+            ast_map = {}
+            for ap in ast_prefix:
+                sub_map = {k: v for k, v in marker_dict.items() if k.startswith(p + "_" + ap)}
+                ast_keys = list(sub_map.keys())
+                ast_map[ap] = {
+                    'neutral': {},
+                    'trigger': {},
+                    'all': {}
+                }
+                for key in ast_keys:
+                    ast_map[ap]['all'][key] = sub_map[key]
+                    if 'control' in key.lower():
+                        ast_map[ap]['neutral'][key] = sub_map[key]
+                    else:
+                        ast_map[ap]['trigger'][key] = sub_map[key]
+            category_mapping[p] = ast_map
         else:
             category_mapping[p] = sub_map
     return marker_dict, id_binding, category_mapping
@@ -168,7 +172,7 @@ def read_data(file_path, eeg_stream_name='obci_eeg1', bindings=None,
         file_path, eeg_stream_name)
     # Create MNE events from the marker data
     if bindings is None:
-        bindings = ['pmt', 'hlt', 'let', 'ast_stim']
+        bindings = ['pmt', 'hlt', 'let', 'ast']
     marker_dict, id_binding, category_mapping = create_mappings(
         marker_data, bindings)
     events = create_events(eeg_insert_points, marker_dict, marker_data)
