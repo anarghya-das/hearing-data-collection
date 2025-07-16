@@ -182,7 +182,7 @@ def read_data(file_path, eeg_stream_name='obci_eeg1', bindings=None,
     # return eeg_stream, events, id_binding, category_mapping
 
 
-def calculate_power_spectrum(epoch, method='multitaper', fmin=1, fmax=20):
+def calculate_power_spectrum(epoch, method='multitaper', fmin=1, fmax=20, mean=False):
     """Calculate power spectrum for given epochs."""
     psd = epoch.compute_psd(method=method, fmin=fmin, fmax=fmax)
     power, freqs = psd.get_data(return_freqs=True)
@@ -197,10 +197,12 @@ def calculate_power_spectrum(epoch, method='multitaper', fmin=1, fmax=20):
     #         return_itc=True,
     #         decim=3,
     #     )
+    if mean:
+        power = power.mean(axis=(0, 1))
     return power, freqs
 
 
-def plot_power_spectrum(power, freq, average_axis=(0, 1), title='Power Spectrum'):
+def plot_power_spectrum(power, freq, average_axis=(0, 1), title='Power Spectrum', already_mean=False):
     print(f"Power shape: {power.shape}, Frequency shape: {freq.shape}")
     bands = {
         'delta': (freq[0], 4, 'blue'),
@@ -209,7 +211,11 @@ def plot_power_spectrum(power, freq, average_axis=(0, 1), title='Power Spectrum'
         'beta': (13, 30, 'red'),
         'gamma': (30, freq[-1], 'purple')
     }
-    mean_power = power.mean(axis=average_axis)
+
+    if not already_mean:
+        mean_power = power.mean(axis=average_axis)
+    else:
+        mean_power = power
 
     fig = plt.figure(figsize=(10, 6))
     for band, (low, high, color) in bands.items():
@@ -228,6 +234,53 @@ def plot_power_spectrum(power, freq, average_axis=(0, 1), title='Power Spectrum'
 
     return fig
 
+# probably redundant but fits the pattern of having a compute and plot function for each step
+def compute_tf_analysis(epochs, freqs, n_cycles):
+    return epochs.compute_tfr(
+        method="morlet",
+        freqs=freqs,
+        n_cycles=n_cycles,
+        average=True,
+        return_itc=True,
+        decim=3,
+    )
+
+def plot_tf_analysis(power):
+    channels = power.ch_names
+    n_channels = len(channels)
+    n_cols = 4
+    n_rows = int(np.ceil(n_channels / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 3 * n_rows))
+    axes = axes.flatten()
+
+    # Normalize each channel's power between 0 and 1
+    for idx, ch in enumerate(channels):
+        data = power.data[idx]
+        data_norm = (data - data.min()) / (data.max() - data.min() + 1e-12)
+        im = axes[idx].imshow(
+            data_norm,
+            aspect='auto',
+            origin='lower',
+            extent=[power.times[0], power.times[-1], power.freqs[0], power.freqs[-1]],
+            vmin=0,
+            vmax=1,
+            cmap='Reds'
+        )
+        axes[idx].set_title(ch)
+        axes[idx].set_ylabel('Freq (Hz)')
+        axes[idx].set_xlabel('Time (s)')
+
+    # Hide any unused subplots
+    for ax in axes[n_channels:]:
+        ax.axis('off')
+
+    # Add a single colorbar to the right
+    fig.subplots_adjust(right=0.88)
+    cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
+    plt.colorbar(im, cax=cbar_ax)
+
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
 
 def compute_band_ratios(power, freqs, bands={
     'delta': (1, 4),
