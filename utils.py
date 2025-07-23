@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 import glob
 import numpy as np
 import os
@@ -266,6 +267,44 @@ def plot_tf_analysis(power):
             vmin=0,
             vmax=1,
             cmap='Reds'
+        )
+        axes[idx].set_title(ch)
+        axes[idx].set_ylabel('Freq (Hz)')
+        axes[idx].set_xlabel('Time (s)')
+
+    # Hide any unused subplots
+    for ax in axes[n_channels:]:
+        ax.axis('off')
+
+    # Add a single colorbar to the right
+    fig.subplots_adjust(right=0.88)
+    cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
+    plt.colorbar(im, cax=cbar_ax)
+
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
+
+def plot_tf_difference(power1, power2):
+    assert(np.array_equal(power1.ch_names, power2.ch_names))
+    assert(np.array_equal(power1.times, power2.times))
+    channels = power1.ch_names
+    n_channels = len(channels)
+    n_cols = 4
+    n_rows = int(np.ceil(n_channels / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 3 * n_rows))
+    axes = axes.flatten()
+
+    # Normalize each channel's power between 0 and 1
+    for idx, ch in enumerate(channels):
+        diff = power1.data[idx] - power2.data[idx]
+        norm = TwoSlopeNorm(vmin=diff.min(), vcenter=0, vmax=diff.max())
+        im = axes[idx].imshow(
+            diff,
+            aspect='auto',
+            origin='lower',
+            extent=[power1.times[0], power1.times[-1], power1.freqs[0], power1.freqs[-1]],
+            cmap='bwr',
+            norm=norm
         )
         axes[idx].set_title(ch)
         axes[idx].set_ylabel('Freq (Hz)')

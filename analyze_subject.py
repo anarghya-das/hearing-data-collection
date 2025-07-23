@@ -87,14 +87,17 @@ def main():
 
     if cmd_args.display_plots:
         for disp in DISPS:
-            plot_power_spectrum(
-                psd_normalized_power[disp], psd_freqs['prestim'][disp], already_mean=True)
-            plt.show()
+            plot_power_spectrum(psd_normalized_power[disp], psd_freqs['prestim'][disp], already_mean=True)
+            pass
     
     # TODO: add beta and gamma band frequencies
-    tfr_alpha_freqs = np.logspace(*np.log10([1, 20]), num=8) # alpha band frequencies
+    tfr_delta_freqs = np.logspace(*np.log10([1, 4]), num=8) # alpha band frequencies
+    tfr_theta_freqs = np.logspace(*np.log10([4, 8]), num=8) # alpha band frequencies
+    tfr_alpha_freqs = np.logspace(*np.log10([8, 13]), num=8) # alpha band frequencies
+    tfr_beta_freqs = np.logspace(*np.log10([13, 30]), num=8) # alpha band frequencies
+    tfr_gamma_freqs = np.logspace(*np.log10([30, 50]), num=8) # alpha band frequencies
 
-    tfr_bands = {'alpha': tfr_alpha_freqs}
+    tfr_bands = {'delta': tfr_delta_freqs, 'theta': tfr_theta_freqs, 'alpha': tfr_alpha_freqs, 'beta': tfr_beta_freqs, 'gamma': tfr_gamma_freqs}
 
     tfr_power = {}
     tfr_itc = {}
@@ -113,7 +116,16 @@ def main():
             for timing in TIMINGS:
                 for disp in DISPS:
                     plot_tf_analysis(tfr_power[band][timing][disp])
-                    plt.show()
+                    pass
+    
+    if cmd_args.display_plots:
+        for band in tfr_bands:
+            for disp in DISPS:
+                plot_tf_difference(tfr_power[band]['stim'][disp], tfr_power[band]['prestim'][disp])
+                pass
+
+    if cmd_args.display_plots:
+        plt.show()
     
     output = {
         'epochs': {},
