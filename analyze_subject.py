@@ -23,7 +23,7 @@ def setup_parser():
     parser.add_argument('index', help="index of subject, i.e. X for CTRLX or EXPX")
     parser.add_argument('-o', '--output', help="name of the .pkl output file")
     parser.add_argument('-n', '--no_ar_fit', action='store_true', help="do not fit autoreject to epochs, only for saving time debugging")
-    parser.add_argument('-d', '--display_plots', action='store_true', help="display plots")
+    parser.add_argument('-p', '--plot_save', action='store_true', help="save plots")
     return parser
 
 def main():
@@ -33,6 +33,20 @@ def main():
     exp_path = os.path.join("exp_data","02_Experimental")
     control_path = os.path.join("exp_data","01_Control")
     glob_pattern = os.path.join("**","*.xdf")
+
+    out_dir = cmd_args.output
+    if not out_dir:
+        out_dir = "processed"
+        if not os.path.isdir("processed"):
+            os.mkdir("processed")
+        if cmd_args.group == 'c':
+            out_dir = os.path.join(out_dir, "CTRL")
+        else:
+            out_dir = os.path.join(out_dir, "EXP")
+        out_dir += str(cmd_args.index).zfill(2)
+    
+    if not os.path.isdir(out_dir):
+        os.mkdir(out_dir)
 
     if cmd_args.group == 'c':
         files = glob.glob(os.path.join(control_path,glob_pattern),recursive=True)
@@ -85,12 +99,11 @@ def main():
     for disp in DISPS:
         psd_normalized_power[disp] = psd_power['stim'][disp] / psd_power['prestim'][disp]
 
-    if cmd_args.display_plots:
+    if cmd_args.plot_save:
         for disp in DISPS:
             plot_power_spectrum(psd_normalized_power[disp], psd_freqs['prestim'][disp], already_mean=True)
-            pass
+            plt.savefig(os.path.join(out_dir, f"psd_{disp}.png"))
     
-    # TODO: add beta and gamma band frequencies
     tfr_delta_freqs = np.logspace(*np.log10([1, 4]), num=8) # alpha band frequencies
     tfr_theta_freqs = np.logspace(*np.log10([4, 8]), num=8) # alpha band frequencies
     tfr_alpha_freqs = np.logspace(*np.log10([8, 13]), num=8) # alpha band frequencies
@@ -111,22 +124,20 @@ def main():
                 tfr_power[band][timing][disp], tfr_itc[band][timing][disp] = compute_tf_analysis(
                     epochs[timing][disp], tfr_bands[band], tfr_bands[band] / 2.0)
 
-    if cmd_args.display_plots:
+    if cmd_args.plot_save:
         for band in tfr_bands:
             for timing in TIMINGS:
                 for disp in DISPS:
                     plot_tf_analysis(tfr_power[band][timing][disp])
-                    pass
+                    plt.savefig(os.path.join(out_dir, f"tfr_band_{band}_{timing}_{disp}.png"))
     
-    if cmd_args.display_plots:
+    if cmd_args.plot_save:
         for band in tfr_bands:
             for disp in DISPS:
                 plot_tf_difference(tfr_power[band]['stim'][disp], tfr_power[band]['prestim'][disp])
+                plt.savefig(os.path.join(out_dir, f"tfr_diff_{band}_{disp}.png"))
                 pass
 
-    if cmd_args.display_plots:
-        plt.show()
-    
     output = {
         'epochs': {},
         'psd': {},
@@ -146,18 +157,11 @@ def main():
         } for band in tfr_bands
     }
 
-    out_file = cmd_args.output
-    if not out_file:
-        if cmd_args.group == 'c':
-            out_file = "CTRL"
-        else:
-            out_file = "EXP"
-        out_file += str(cmd_args.index).zfill(2)
-        out_file += ".pkl"
+    out_pkl = os.path.join(out_dir, "data.pkl")
 
-    with open(out_file, 'wb') as f:
+    with open(out_pkl, 'wb') as f:
         pickle.dump(output, f)
     
-    print(f"pickled output written to {out_file}")
+    print(f"pickled output written to {out_dir}")
 
 main()
