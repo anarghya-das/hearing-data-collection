@@ -12,7 +12,7 @@ import pyxdf
 from utils import *
 
 TIMINGS = ['prestim', 'stim']
-DISPS= ['neutral', 'trigger'] # dispositions, may not be the best name
+DISPS = ['neutral', 'trigger'] # dispositions, may not be the best name
 
 def setup_parser():
     parser = argparse.ArgumentParser(
