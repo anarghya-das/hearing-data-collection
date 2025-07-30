@@ -8,7 +8,7 @@ DISPS = ['neutral', 'trigger'] # dispositions, may not be the best name
 
 def setup_parser():
     parser = argparse.ArgumentParser(
-                    prog='get_stats',
+                    prog='get_stats_subject',
                     description='TODO',
                     epilog='Text at the bottom of help')
     parser.add_argument('group', choices=['c', 'e'], help="c for control, e for experimental")
@@ -47,18 +47,26 @@ def main():
     
     tfr_bands = {'delta', 'theta', 'alpha', 'beta', 'gamma'}
     avg_negative = {}
+    avg_positive = {}
     for disp in DISPS:
         avg_negative[disp] = {}
+        avg_positive[disp] = {}
         for band in tfr_bands:
             prestim_power = data['tfr'][band]['power']['prestim'][disp].data
             stim_power = data['tfr'][band]['power']['stim'][disp].data
             diff_power = stim_power - prestim_power
             avg_negative[disp][band] = np.where(diff_power > 0, 0, diff_power).mean()
+            avg_positive[disp][band] = np.where(diff_power < 0, 0, diff_power).mean()
     
     avg_negative_ratio = {
         band: float(avg_negative['trigger'][band] / avg_negative['neutral'][band])
         for band in tfr_bands
     }
+    avg_positive_ratio = {
+        band: float(avg_positive['trigger'][band] / avg_positive['neutral'][band])
+        for band in tfr_bands
+    }
     print(sorted(avg_negative_ratio.items()))
+    print(sorted(avg_positive_ratio.items()))
         
 main()
