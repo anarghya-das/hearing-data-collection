@@ -9,6 +9,10 @@ The offline QC and dataset-building pipelines for the recorded data live in [`pr
 - **Channel 13 (R7) is an open circuit** in most recordings — a rig fault,
   not a montage or analysis problem, and the rest of the right grid is fine.
   Diagnosis and repair steps: [`docs/recording_rig_faults.md`](docs/recording_rig_faults.md).
+- **Channel 1 (L1) is dead in every session since the 2026-09-17 rewiring**
+  (intermittent before that). To check whether the Cyton and Daisy boards
+  themselves are working, follow
+  [`docs/openbci_board_testing.md`](docs/openbci_board_testing.md).
 
 ## Pre-Requisites
 

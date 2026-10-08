@@ -7,6 +7,12 @@ it silently produced duplicated data that the QC scored as good.
 **Status:** open, not yet repaired. **Affects:** OpenBCI recordings from
 2025-02-27 onward. **Owner:** whoever next has the rig on the bench.
 
+**Update 2026-10-08.** The rig was rewired on 2026-09-17: separate Cyton/Daisy
+references (L6 / R6, no Y-splitter), bias moved to L5, channel 4 moved to L3.
+R7 is still dead afterwards, and **L1 (channel 1)**, intermittent since mid-2025,
+is now dead in every session. To test whether the boards themselves work before
+chasing the wiring, use [`openbci_board_testing.md`](openbci_board_testing.md).
+
 ## First: the reference design contradicts itself about REF/GND — use L6/R6
 
 `MKnierim/openbci-ceegrids` states the REF/GND assignment **two different ways**:

@@ -161,7 +161,10 @@ an OPEN, not a short and not a gel problem. The rig, not the montage: R5 (the
 other immediate neighbour of GND at R6) is healthy, and excluding ch13 the
 right grid matches the left (22.3% vs 18.6% bad, p=0.86) — so **the right-side
 data is usable**. Do not "fix" this in analysis code. Diagnosis + repair
-procedure: `docs/recording_rig_faults.md`.
+procedure: `docs/recording_rig_faults.md`; board self-test (are the Cyton and
+Daisy themselves OK?): `docs/openbci_board_testing.md`. Since the 2026-09-17
+rewiring ("New Bci Configuration": Cyton ref L6, Daisy ref R6, no Y-splitter,
+bias L5, channel 4 reads L3), channel 1 (L1) is also dead in every session.
 
 THREE MORE, same doc: (2) the 7 "all 16 channels dead" recordings are ONE
 REF/BIAS failure each -- every channel pinned at the negative rail -- not 16
