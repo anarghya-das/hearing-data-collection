@@ -418,7 +418,8 @@ def check_demographics(pids, workbook):
         r = rows.get(pid, {})
         missing = [f for f in REQUIRED_CLINICAL if not str(r.get(f, "")).strip()]
         n = sum(1 for k, v in r.items()
-                if k not in ("subject_id", "group", "devices_present")
+                if k not in ("subject_id", "group", "devices_present",
+                             "questionnaire_device")
                 and str(v).strip())
         flag = "OK " if not missing else "GAP"
         print(f"  {flag} {pid}: {n:3d} clinical fields"
@@ -520,7 +521,8 @@ def refresh_clinical(workbook, dry_run, only_variant=None):
             str(r.get(m, "")).strip() for m in (measures or [])))
         n_any = sum(1 for r in rows if any(
             str(val).strip() for k, val in r.items()
-            if k not in ("subject_id", "group", "devices_present")))
+            if k not in ("subject_id", "group", "devices_present",
+                         "questionnaire_device")))
         print(f"  {v.parent.name}/{v.name}: {len(rows)} subjects, {len(cols)} cols, "
               f"{n_any} with clinical data"
               + (f", {n_quest} with questionnaires" if measures else ""))

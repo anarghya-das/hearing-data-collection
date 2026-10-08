@@ -86,6 +86,9 @@ are in `processing/README.md`; do not restate them here.
 - **Per-participant resolution quirks belong in `synapse_qc/inventory.py`**, in
   one place: `-old` sessions skipped unless they are the only one (CTRL01/02/03),
   EXP44's stream empty, EXP26/CTRL03 have no EEG stream.
+- **The clinical loader fails loudly on misaligned questionnaire rows** (GAD vs
+  `Severity Data Sum`; it caught CTRL06-09). Fix such rows on Box, not in code;
+  see `processing/docs/data_sync.md` "Workbook layout drift".
 
 ## Processing — pipelines and datasets
 

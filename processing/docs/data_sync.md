@@ -194,14 +194,28 @@ are what caught both insertions instead of silently misreading. **If a guard
 trips, find the inserted column and check whether `_shift`'s anchor needs
 widening; do not bump the constants by hand.**
 
-Two more workbook quirks the loader handles:
+More workbook quirks the loader handles:
 
-- **Two questionnaire sheets.** The later EXP batch (EXP20, EXP43–46, EXP50–54)
-  is entered **only** in `Questionnaires (OpenBCi)`, not the plain
-  `Questionnaires` sheet. `load_clinical_rows` reads the primary sheet first and
-  falls back to the OpenBCi sheet for subjects it omits, never overriding a
-  primary value. Before this, those six cohort subjects had silently blank
-  questionnaire scores.
+- **Questionnaires are per headset session (since 2026-10-05).** The workbook
+  has `Questionnaires (OpenBCi)` and `Questionnaires (Neurable)`, one row per
+  subject per session; the old primary `Questionnaires` sheet is gone. A
+  subject's scores come from the OpenBCi sheet when it has a row there (every
+  built dataset uses OpenBCI EEG, so the questionnaire must be that session's;
+  EXP10 has both), else from the Neurable sheet (Neurable-only: EXP32, EXP42,
+  EXP55). `labels.csv` gains a `questionnaire_device` column saying which.
+  Demographics `PC ID` / `New PC ID` / `Neurable ID` say which recording
+  (`sub-<id>`) is which headset. EXP10's Neurable ID and all of EXP42's IDs
+  were blank on 2026-10-08. Older workbooks with the primary sheet still load
+  exactly as before: primary first, OpenBCi only as a fallback.
+- **The GAD tripwire.** `load_clinical_rows` raises if any emitted GAD total
+  falls in a different category from the hand-entered GAD column of
+  `Severity Data Sum`. That catches score rows pasted against the wrong IDs.
+  It fired on the 10-05 workbook: the OpenBCi sheet had CTRL06–09 rotated
+  (CTRL06 carried CTRL07's scores, 07 had 08's, 08 had 09's, 09 had 06's). This
+  was already true on 09-04, but the primary sheet masked it, and it agreed with
+  `Severity Data Sum` for 34/34 subjects. **Fix it in the workbook on Box,
+  never with a remap in code.** It can't see a swap within one GAD band
+  (CTRL09's two candidate scores are both "minimal").
 - **`"No Tinnitus"` as a score.** The OpenBCi sheet writes that text in
   `THI_Total` for every control, where the primary sheet leaves the cell blank.
   `_quest_cell` normalizes it to blank, else the column becomes an object dtype

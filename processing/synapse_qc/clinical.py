@@ -1,18 +1,32 @@
 """Per-subject clinical rows straight from the PC workbook (02_PCData.xlsx).
 
 Self-contained replacement for the ``../../synapse`` published clinical loaders,
-so ``clinical.csv`` can be built on any machine from the workbook alone. Parses
-three sheets:
+so ``clinical.csv`` can be built on any machine from the workbook alone. Parses:
 
 * ``Demographics``  — one row per subject (ids, age/sex/race, dx history)
-* ``Questionnaires`` — one row per subject (THI/GAD/HQ/Iowa/Misophonia scores)
-* ``Questionnaires (OpenBCi)`` — **fallback** for subjects the coordinator only
-  entered there (the later EXP batch: EXP20, EXP43-46, EXP50-54). Same measures,
-  but eight condition-flag columns are inserted before THI so every column is
-  shifted right — hence a second position map. Used only when a subject is
-  absent from ``Questionnaires``; it never overrides a value from that sheet.
+* the questionnaire sheets (THI/GAD/HQ/Iowa/Misophonia scores), in one of two
+  layouts:
+
+  - **per device** (the workbook since 2026-10-05): ``Questionnaires (OpenBCi)``
+    and ``Questionnaires (Neurable)``, one row per subject per headset session.
+    A subject's scores come from the OpenBCi sheet if it has a row there (every
+    built dataset uses the OpenBCI EEG, so the questionnaire must be the one
+    taken at that session — EXP10 has both), else from the Neurable sheet
+    (Neurable-only subjects: EXP32/42/55). ``questionnaire_device`` records
+    which. The Demographics ``PC ID`` / ``New PC ID`` / ``Neurable ID`` columns
+    say which recording (``sub-<id>``) belongs to which headset.
+  - **legacy** (older workbooks, e.g. the published one): a primary
+    ``Questionnaires`` sheet, with ``Questionnaires (OpenBCi)`` only as a
+    **fallback** for subjects absent from it (the later EXP batch: EXP20,
+    EXP43-46, EXP50-54). Kept bit-identical so old builds reproduce.
+
+  The device sheets carry condition-flag columns before THI, so every measure
+  is shifted right relative to ``Questionnaires`` — hence a second position map.
 * ``Audio Data``    — one wide row per subject (cohort flags, PTA + UHF
   thresholds, SRT, WRS, LDLs, tinnitus matching, tympanometry)
+* ``Severity Data Sum`` — only as a tripwire: the scores we emit are checked
+  against its hand-entered GAD category, which caught the OpenBCi sheet's
+  CTRL06-09 rows sitting against the wrong IDs (see :func:`_check_gad_severity`).
 
 The workbook uses multi-row decorated headers, so columns are addressed by
 position and **validated against the header labels** — if the coordinator
@@ -37,8 +51,12 @@ MEASURE_COLS = {
     "Miso_Section1": 17, "Miso_Section2": 18, "Miso_Section3": 19,
 }
 
-# 'Questionnaires (OpenBCi)' sheet: same measures, shifted right by the
-# condition-flag block (cols 2-9). Validated in _check_quest_openbci.
+# The per-device sheets: same measures, shifted right by the condition-flag
+# block (cols 2-9). Base positions; _quest_device_cols corrects for inserted or
+# missing flag columns (the Neurable sheet has no COG column, the OpenBCi sheet
+# gained TBI), so one map serves both sheets.
+QUEST_SHEETS = {"OpenBCI": "Questionnaires (OpenBCi)",
+                "Neurable": "Questionnaires (Neurable)"}
 MEASURE_COLS_OPENBCI = {
     "THI_Total": 10, "GAD_Total": 12,
     "HQ_Functional": 14, "HQ_Social": 15, "HQ_Emotional": 16, "HQ_Total": 17,
@@ -138,11 +156,10 @@ def _check_quest(df):
     _expect(df, 2, 10, "Total Score", "Questionnaires")
 
 
-def _quest_openbci_cols(df):
+def _quest_device_cols(df, sheet):
     """``MEASURE_COLS_OPENBCI`` corrected for any inserted condition-flag
     columns, then validated. THI is the first measure after the flag block, so
     one anchor fixes every measure."""
-    sheet = "Questionnaires (OpenBCi)"
     d = _shift(df, 1, "THI", MEASURE_COLS_OPENBCI["THI_Total"], sheet)
     cols = {m: c + d for m, c in MEASURE_COLS_OPENBCI.items()}
     _expect(df, 1, cols["GAD_Total"], "GAD", sheet)
@@ -151,6 +168,67 @@ def _quest_openbci_cols(df):
     _expect(df, 2, cols["Iowa_Total"], "Total Score", sheet)
     _expect(df, 2, cols["Miso_Section1"], "Section 1", sheet)
     return cols
+
+
+def _num(v):
+    """``v`` as a float, or None for blanks / text / NaN."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(f) else f
+
+
+def _gad_category(score):
+    """GAD-7 total -> the category code 'Severity Data Sum' uses (its own
+    legend: 1 = 5-7, 2 = 8-9, 3 = 10-14, 4 = 15-21; 0 below 5)."""
+    return (0 if score < 5 else 1 if score < 8 else 2 if score < 10
+            else 3 if score < 15 else 4)
+
+
+def _severity_gad(df):
+    """{PID: GAD category} from 'Severity Data Sum'. The sheet holds an EXP and
+    a CTRL block, each headed by a ``Subject`` cell with ``GAD`` to its right."""
+    out = {}
+    for i in range(min(len(df), 12)):
+        for j in range(df.shape[1]):
+            if str(df.iat[i, j]).strip() != "Subject":
+                continue
+            g = _find_label(df, i, "GAD", j + 1, j + 8)
+            if g is None:
+                continue
+            for r in range(i + 1, len(df)):
+                pid, v = str(df.iat[r, j]).strip(), _num(df.iat[r, g])
+                if _ID_RE.match(pid) and pid not in out and v in (0, 1, 2, 3, 4):
+                    out[pid] = int(v)
+    return out
+
+
+def _check_gad_severity(gad, xls):
+    """Raise if any emitted GAD total disagrees with the hand-entered GAD
+    category in 'Severity Data Sum' -- the symptom of score rows pasted against
+    the wrong IDs. It caught the OpenBCi sheet's CTRL06-09 rotation (CTRL06
+    carried CTRL07's scores, ...); the deleted primary sheet agreed 34/34. It is
+    a tripwire, not full validation: a swap within one GAD band (CTRL09) is
+    invisible to it. ``gad`` is {PID: (score, sheet)}."""
+    if "Severity Data Sum" not in xls.sheet_names:
+        print("[clinical] WARNING: no 'Severity Data Sum' sheet -- cannot "
+              "cross-check questionnaire rows against subject ids")
+        return
+    sev = _severity_gad(pd.read_excel(xls, sheet_name="Severity Data Sum",
+                                      header=None))
+    bad = []
+    for sid, (raw, sheet) in gad.items():
+        score = _num(raw)
+        if score is not None and sid in sev and _gad_category(score) != sev[sid]:
+            bad.append(f"{sid}: GAD {score:g} in {sheet!r} is category "
+                       f"{_gad_category(score)}, 'Severity Data Sum' says {sev[sid]}")
+    if bad:
+        raise ValueError(
+            "questionnaire scores disagree with 'Severity Data Sum' -- rows "
+            "probably pasted against the wrong subject ids. Fix the workbook "
+            "on Box; do not work around it in code (docs/data_sync.md):\n  "
+            + "\n  ".join(bad))
 
 
 # Audio Data: everything from this column onward slides when a condition flag
@@ -243,34 +321,55 @@ def load_clinical_rows(xlsx_path, subjects, measures=None):
         raise ValueError(f"unknown clinical measures {unknown}; "
                          f"available: {sorted(MEASURE_COLS)}")
 
-    quest = pd.read_excel(xlsx_path, sheet_name="Questionnaires", header=None)
-    quest_ob = pd.read_excel(xlsx_path, sheet_name="Questionnaires (OpenBCi)",
-                             header=None)
-    demo = pd.read_excel(xlsx_path, sheet_name="Demographics", header=None)
-    audio = pd.read_excel(xlsx_path, sheet_name="Audio Data", header=None)
+    xls = pd.ExcelFile(xlsx_path)
+    # Legacy layout iff the primary sheet exists (see the module docstring).
+    legacy = "Questionnaires" in xls.sheet_names
+    if legacy:
+        quest = pd.read_excel(xls, sheet_name="Questionnaires", header=None)
+        _check_quest(quest)
+        q_rows = _subject_rows(quest)
+    # device -> (sheet name, frame, measure cols, {PID: row}). The legacy
+    # layout uses only the OpenBCi sheet (as its fallback); the Neurable sheet
+    # is optional either way, since older workbooks predate it.
+    dev = {}
+    for device, sheet in QUEST_SHEETS.items():
+        if device == "Neurable" and (legacy or sheet not in xls.sheet_names):
+            continue
+        df = pd.read_excel(xls, sheet_name=sheet, header=None)
+        dev[device] = (sheet, df, _quest_device_cols(df, sheet), _subject_rows(df))
+    demo = pd.read_excel(xls, sheet_name="Demographics", header=None)
+    audio = pd.read_excel(xls, sheet_name="Audio Data", header=None)
 
-    _check_quest(quest)
-    ob_cols = _quest_openbci_cols(quest_ob)
     demo_hdr = _header_row(demo)
     _expect(demo, demo_hdr, 8, "Biological Sex", "Demographics")
     audio_hdr = _header_row(audio)
     audio_d = _audio_shift(audio, audio_hdr)
     _check_audio(audio, audio_hdr, audio_d)
 
-    q_rows, q_rows_ob, d_rows, a_rows = (
-        _subject_rows(x) for x in (quest, quest_ob, demo, audio))
+    d_rows, a_rows = _subject_rows(demo), _subject_rows(audio)
 
-    out = []
+    out, gad = [], {}
     for sid in subjects:
         row = {"subject_id": sid,
                "group": "EXP" if sid.startswith("EXP") else "CTRL"}
-        # Primary sheet wins; the OpenBCi sheet only fills subjects it omits.
-        if sid in q_rows:
+        if legacy and sid in q_rows:
+            # Primary sheet wins; the OpenBCi sheet only fills subjects it omits.
             for m in measures:
                 row[m] = _quest_cell(quest.iat[q_rows[sid], MEASURE_COLS[m]])
-        elif sid in q_rows_ob:
-            for m in measures:
-                row[m] = _quest_cell(quest_ob.iat[q_rows_ob[sid], ob_cols[m]])
+            gad[sid] = (quest.iat[q_rows[sid], MEASURE_COLS["GAD_Total"]],
+                        "Questionnaires")
+        else:
+            # The OpenBCi session's questionnaire if there is one, else the
+            # Neurable session's (legacy: OpenBCi only).
+            src = next((d for d in ("OpenBCI", "Neurable")
+                        if d in dev and sid in dev[d][3]), None)
+            if src:
+                sheet, df, cols, rows = dev[src]
+                for m in measures:
+                    row[m] = _quest_cell(df.iat[rows[sid], cols[m]])
+                gad[sid] = (df.iat[rows[sid], cols["GAD_Total"]], sheet)
+            if not legacy:
+                row["questionnaire_device"] = src or ""
         if sid in d_rows:
             row.update(_demographics(demo, demo_hdr, d_rows[sid]))
         if sid in a_rows:
@@ -288,4 +387,5 @@ def load_clinical_rows(xlsx_path, subjects, measures=None):
         row = {"subject_id": sid, "group": row["group"],
                "devices_present": ", ".join(devices), **row}
         out.append(row)
+    _check_gad_severity(gad, xls)
     return out

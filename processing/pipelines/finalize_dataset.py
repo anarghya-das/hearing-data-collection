@@ -277,7 +277,8 @@ def _write_clinical(out_root, subjects, cfg):
         w.writerows(out_rows)
     n_scored = sum(1 for r in out_rows
                    if any(str(v).strip() for k, v in r.items()
-                          if k not in ("subject_id", "group", "devices_present")))
+                          if k not in ("subject_id", "group", "devices_present",
+                                       "questionnaire_device")))
     print(f"[clinical] wrote labels.csv ({n_scored}/{len(out_rows)} subjects "
           f"with workbook entries, from {os.path.basename(clinical_path)})")
     return {"csv": "labels.csv", "workbook": clinical_path,
