@@ -12,7 +12,9 @@ because each depends on the one before it (numbering matches the table in
 2. **Workbook -> Drive.** Mirror the same file into the Drive ``PC/`` folder so
    recordings and labels live together (the coordinator only ever sees Drive).
 3. **Drive -> local recordings.** Diff ``PC/{Control,Experimental}`` against the
-   local ``data/`` tree and download whatever is missing.
+   local ``raw/`` tree and download whatever is missing. When the raw tree IS
+   the Drive mount (``$SYNAPSE_DATA_BASE`` = the mounted ``PC/``) there is
+   nothing to download; "new" then means not yet in the QC workbook.
 4. **Demographics gate.** A recording is only scored once its demographics exist
    in the workbook, since a subject with no clinical row cannot enter a dataset
    anyway. ``--skip-demographics-check`` scores it regardless, for when you want
@@ -33,9 +35,13 @@ Stages 1-2 always run. ``--clinical-only`` runs 1, 2 and 7 -- the fast path for
 "the coordinator entered new demographics, update the datasets" with no download
 and no QC.
 
-Both remotes are pre-configured rclone remotes (``box:`` / ``gdrive:``). Neither
-source folder is in the account's own root, so every path MUST be rooted by
-folder id -- see ``BOX_FOLDER_ID`` / ``DRIVE_ROOT_ID`` below.
+Box always goes through the pre-configured ``box:`` rclone remote. Drive goes
+through the ``gdrive:`` remote by default (the lab server), or -- with
+``--drive-mount`` / ``$SYNAPSE_DRIVE_MOUNT`` -- through a Google Drive for
+Desktop mount of the upload root (a workstation). Neither source folder is in
+the account's own root, so every rclone path MUST be rooted by folder id, and a
+mount is checked against that same id -- see ``BOX_FOLDER_ID`` /
+``DRIVE_ROOT_ID`` below.
 
 **``docs/data_sync.md`` is the reference for all of this** -- the by-hand
 commands, the non-EEG sibling folders, the phone-only subject ids that look like
@@ -47,12 +53,15 @@ missing controls, and the workbook's shifting column layout.
     python -m scripts.sync_study_data --clinical-only --variant usable__zero_mask
     python -m scripts.sync_study_data --skip-demographics-check
     python -m scripts.sync_study_data --no-qc        # sync only
+    python -m scripts.sync_study_data --dry-run \\
+        --drive-mount ~/"Google Drive/My Drive/PC-Synapse AudioSight/Participant Data"
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime
+import fnmatch
 import hashlib
 import os
 import shutil
@@ -114,6 +123,133 @@ def box(*args, **kw):
                   root_id=BOX_FOLDER_ID, **kw)
 
 
+def _junk(name):
+    return any(fnmatch.fnmatch(name, j) for j in JUNK)
+
+
+def _drivefs_item_id(path):
+    """The Drive id that Google Drive for Desktop records on a mounted folder,
+    or None where it is not available (another sync client, not macOS)."""
+    try:
+        r = subprocess.run(["xattr", "-p", "com.google.drivefs.item-id#S",
+                            str(path)], capture_output=True, text=True)
+    except OSError:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+# --------------------------------------------------------------------------- #
+# Drive backends: the gdrive: rclone remote, or a Drive for Desktop mount.
+# Both take paths relative to the upload root DRIVE_ROOT_ID.
+# --------------------------------------------------------------------------- #
+class RcloneDrive:
+    """Drive through the ``gdrive:`` rclone remote -- the lab-server default."""
+
+    def __str__(self):
+        return f"rclone gdrive: (root {DRIVE_ROOT_ID})"
+
+    def list_dirs(self, rel):
+        out = drive("lsf", "--dirs-only", f"gdrive:{rel}", quiet=True)
+        return sorted(x.rstrip("/") for x in out.split() if x.strip("/"))
+
+    def has_xdf(self, rel):
+        out = drive("lsf", "--recursive", "--files-only", "--include", "*.xdf",
+                    f"gdrive:{rel}", quiet=True)
+        return bool(out.strip())
+
+    def size(self, rel):
+        out = drive("size", f"gdrive:{rel}", quiet=True)
+        return out.strip().splitlines()[-1].strip()
+
+    def download(self, rel, dest):
+        args = ["copy", f"gdrive:{rel}", str(dest)]
+        for j in JUNK:
+            args += ["--exclude", j]
+        drive(*args, "-P")
+
+    def upload(self, src, rel):
+        # copyto compares size+mtime and skips a genuinely identical file.
+        drive("copyto", str(src), f"gdrive:{rel}")
+        return drive("lsl", f"gdrive:{rel}", quiet=True).strip()
+
+
+class MountDrive:
+    """Drive through a Google Drive for Desktop mount -- no ``gdrive:`` remote.
+
+    ``root`` is the local folder that IS the Drive folder ``DRIVE_ROOT_ID``
+    ('Participant Data'). A path is only as good as the folder it resolves to,
+    so the id Drive for Desktop stores on the folder is checked, not trusted.
+
+    Two differences from rclone: reading a streamed file is what makes Drive
+    for Desktop fetch it, so a download runs at network speed; and a write only
+    QUEUES the upload -- it reaches Drive once the client has synced it.
+    """
+
+    def __init__(self, root):
+        self.root = Path(root).expanduser()
+        if not (self.root / DRIVE_PC).is_dir():
+            raise RuntimeError(f"Drive mount {self.root} has no {DRIVE_PC}/ "
+                               f"folder -- point it at Drive folder {DRIVE_ROOT_ID}")
+        found = _drivefs_item_id(self.root)
+        if found is None:
+            print(f"WARNING: cannot read the Drive id of {self.root}; "
+                  f"trusting the path")
+        elif found != DRIVE_ROOT_ID:
+            raise RuntimeError(f"Drive mount {self.root} is Drive folder {found}, "
+                               f"not the upload root {DRIVE_ROOT_ID}")
+
+    def __str__(self):
+        return f"mount {self.root}"
+
+    def _files(self, rel):
+        for dirpath, dirnames, filenames in os.walk(self.root / rel):
+            dirnames[:] = [d for d in dirnames if not _junk(d)]
+            for f in filenames:
+                if not _junk(f):
+                    yield Path(dirpath) / f
+
+    def list_dirs(self, rel):
+        return sorted(p.name for p in (self.root / rel).iterdir()
+                      if p.is_dir() and not p.name.startswith("."))
+
+    def has_xdf(self, rel):
+        return any(p.suffix == ".xdf" for p in self._files(rel))
+
+    def size(self, rel):
+        files = list(self._files(rel))
+        total = sum(p.stat().st_size for p in files)
+        return f"{len(files)} files, {total / 1e9:.2f} GB"
+
+    def download(self, rel, dest):
+        src = self.root / rel
+
+        def copy(s, d):
+            print(f"    {Path(s).relative_to(src)} "
+                  f"({os.path.getsize(s) / 1e6:.0f} MB)", flush=True)
+            return shutil.copy2(s, d)
+
+        # A half-copied subject folder would look present to the next run's
+        # diff and never be re-fetched, so an interrupted copy removes it.
+        try:
+            shutil.copytree(src, dest, copy_function=copy,
+                            ignore=shutil.ignore_patterns(*JUNK))
+        except BaseException:
+            shutil.rmtree(dest, ignore_errors=True)
+            raise
+
+    def upload(self, src, rel):
+        dest = self.root / rel
+        if dest.exists() and sha(dest) == sha(src):
+            return f"{dest} (unchanged)"
+        # Drive for Desktop turns an overwrite into a NEW Drive file (new id)
+        # and trashes the old one (seen 2026-10-08 on 02_PC Data.xlsx), so the
+        # previous version survives only in the trash, ~30 days, not as a
+        # revision. rclone's gdrive: copyto updates in place instead.
+        shutil.copy2(src, dest)
+        return (f"{dest} ({dest.stat().st_size} bytes; queued -- Drive for "
+                f"Desktop uploads it in the background)")
+
+
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -165,15 +301,13 @@ def pull_workbook(dry_run, stage_dir):
 # --------------------------------------------------------------------------- #
 # 2. workbook -> Drive PC/
 # --------------------------------------------------------------------------- #
-def push_workbook(dry_run, workbook):
+def push_workbook(dry_run, workbook, drv):
     header(f"{Path(workbook).name} -> Drive {DRIVE_PC}/{BOX_WORKBOOK}")
-    dest = f"gdrive:{DRIVE_PC}/{BOX_WORKBOOK}"
+    dest = f"{DRIVE_PC}/{BOX_WORKBOOK}"
     if dry_run:
-        print(f"  -> WOULD UPLOAD to {dest} (dry-run)")
+        print(f"  -> WOULD UPLOAD to {dest} via {drv} (dry-run)")
         return
-    # copyto compares size+mtime and skips a genuinely identical file.
-    drive("copyto", str(workbook), dest)
-    print(f"  -> uploaded: {drive('lsl', f'gdrive:{DRIVE_PC}/{BOX_WORKBOOK}', quiet=True).strip()}")
+    print(f"  -> uploaded: {drv.upload(workbook, dest)}")
 
 
 # --------------------------------------------------------------------------- #
@@ -204,23 +338,12 @@ def commit_workbook(dry_run):
 # --------------------------------------------------------------------------- #
 # Drive PC/ -> local data/
 # --------------------------------------------------------------------------- #
-def _has_xdf(cohort, pid):
-    """A folder without an .xdf is not an EEG session (audiometry-only, or a
-    phone-era upload) -- do not pull it into the EEG tree."""
-    out = drive("lsf", "--recursive", "--files-only", "--include", "*.xdf",
-                f"gdrive:{DRIVE_PC}/{cohort}/{pid}", quiet=True)
-    return bool(out.strip())
-
-
-def sync_recordings(data_root, dry_run):
+def sync_recordings(data_root, dry_run, drv):
     header(f"Drive {DRIVE_PC}/ -> {data_root}")
     new = {}
     for cohort, local_name in COHORTS.items():
         local_dir = Path(data_root) / local_name
-        remote = sorted(x for x in drive(
-            "lsf", "--dirs-only", f"gdrive:{DRIVE_PC}/{cohort}", quiet=True
-        ).split() if x.strip("/"))
-        remote = [x.rstrip("/") for x in remote]
+        remote = drv.list_dirs(f"{DRIVE_PC}/{cohort}")
         local = sorted(p.name for p in local_dir.iterdir() if p.is_dir()) \
             if local_dir.exists() else []
         missing = [p for p in remote if p not in local]
@@ -228,7 +351,9 @@ def sync_recordings(data_root, dry_run):
         print(f"  {cohort:12s} drive={len(remote):3d}  local={len(local):3d}  "
               f"missing={missing or '-'}  local-only={extra or '-'}")
         for pid in missing:
-            if not _has_xdf(cohort, pid):
+            # A folder without an .xdf is not an EEG session (audiometry-only,
+            # or a phone-era upload) -- do not pull it into the EEG tree.
+            if not drv.has_xdf(f"{DRIVE_PC}/{cohort}/{pid}"):
                 print(f"    {pid}: SKIPPED — no .xdf (not an EEG session)")
                 continue
             new[pid] = (cohort, local_dir / pid)
@@ -236,17 +361,47 @@ def sync_recordings(data_root, dry_run):
         print("  -> nothing to download")
         return {}
     for pid, (cohort, dest) in new.items():
-        size = drive("size", f"gdrive:{DRIVE_PC}/{cohort}/{pid}", quiet=True)
-        print(f"  {pid}: {size.strip().splitlines()[-1].strip()}")
+        src = f"{DRIVE_PC}/{cohort}/{pid}"
+        print(f"  {pid}: {drv.size(src)}")
         if dry_run:
             print(f"    -> WOULD DOWNLOAD to {dest} (dry-run)")
             continue
-        args = ["copy", f"gdrive:{DRIVE_PC}/{cohort}/{pid}", str(dest)]
-        for j in JUNK:
-            args += ["--exclude", j]
-        drive(*args, "-P")
+        drv.download(src, dest)
         print(f"    -> {dest}")
     return new
+
+
+def unscored_recordings(data_root):
+    """Stage 3 when the raw tree IS the Drive mount (``$SYNAPSE_DATA_BASE`` =
+    the mounted ``PC/``): nothing to download, so "new" means recorded but
+    absent from the current QC workbook instead."""
+    header(f"Drive {DRIVE_PC}/ is the raw tree -> recordings not yet scored")
+    from synapse_qc import inventory
+    from synapse_qc import paths as qpaths
+    xlsx = Path(qpaths.output_paths()["qc"]) / "quality_results.xlsx"
+    scored = set()
+    if xlsx.exists():
+        import pandas as pd
+        scored = set(pd.read_excel(xlsx, sheet_name="Summary")["participant"])
+    print(f"  QC workbook: {xlsx if xlsx.exists() else 'absent'} "
+          f"({len(scored)} scored)")
+    new = {}
+    for p in inventory.discover(data_root=data_root):
+        if p.pid in scored:
+            continue
+        if not p.xdf_path:
+            print(f"    {p.pid}: SKIPPED — no .xdf (not an EEG session)")
+            continue
+        new[p.pid] = (p.group, Path(p.folder))
+    print(f"  -> unscored: {sorted(new) or 'none'}")
+    return new
+
+
+def _raw_is_mount(data_root, drv):
+    """True when the raw tree is the mounted Drive ``PC/`` folder itself --
+    then a "download" would copy Drive into itself."""
+    return (isinstance(drv, MountDrive) and os.path.isdir(data_root)
+            and os.path.samefile(data_root, drv.root / DRIVE_PC))
 
 
 # --------------------------------------------------------------------------- #
@@ -297,14 +452,13 @@ def run_qc(date, data_root, dry_run):
     return xlsx
 
 
-def push_qc(xlsx, dry_run):
+def push_qc(xlsx, dry_run, drv):
     header(f"Quality workbook -> Drive {DRIVE_PC}/")
-    dest = f"gdrive:{DRIVE_PC}/quality_results.xlsx"
+    dest = f"{DRIVE_PC}/quality_results.xlsx"
     if dry_run or xlsx is None:
-        print(f"  -> WOULD UPLOAD {xlsx} to {dest} (dry-run)")
+        print(f"  -> WOULD UPLOAD {xlsx} to {dest} via {drv} (dry-run)")
         return
-    drive("copyto", str(xlsx), dest)
-    print(f"  -> uploaded: {drive('lsl', dest, quiet=True).strip()}")
+    print(f"  -> uploaded: {drv.upload(xlsx, dest)}")
 
 
 # --------------------------------------------------------------------------- #
@@ -405,7 +559,8 @@ def main():
                     help="run QC even when no new recordings were downloaded")
     ap.add_argument("--data-root", default=None,
                     help="raw recordings dir (default: $SYNAPSE_DATA_ROOT / "
-                         "$SYNAPSE_DATA_BASE/raw / <repo>/raw)")
+                         "$SYNAPSE_DATA_BASE/raw, or $SYNAPSE_DATA_BASE itself "
+                         "when it is the Drive PC/ folder / <repo>/raw)")
     ap.add_argument("--date", default="", help="run-date label for the QC Legend")
     ap.add_argument("--clinical-only", action="store_true",
                     help="pull the workbook and refresh each built variant's "
@@ -416,13 +571,20 @@ def main():
                     help="leave built variants' labels.csv alone")
     ap.add_argument("--commit-workbook", action="store_true",
                     help="git-commit the refreshed workbook (that file only)")
+    ap.add_argument("--drive-mount", default=os.environ.get("SYNAPSE_DRIVE_MOUNT"),
+                    help="Google Drive for Desktop folder that is the upload root "
+                         f"({DRIVE_ROOT_ID}); every Drive read/write goes through "
+                         "it instead of rclone's gdrive: remote "
+                         "(default: $SYNAPSE_DRIVE_MOUNT)")
     args = ap.parse_args()
 
     data_root = args.data_root
     if data_root is None:
         from synapse_qc import inventory
         data_root = inventory._default_data_root()
+    drv = MountDrive(args.drive_mount) if args.drive_mount else RcloneDrive()
     print(f"data root: {data_root}")
+    print(f"drive:     {drv}")
     if args.dry_run:
         print("DRY RUN — nothing will be written, uploaded or downloaded.")
 
@@ -431,7 +593,7 @@ def main():
         # Stages 1-2 always run: the workbook is the cheapest thing to keep
         # current and everything downstream judges against it.
         wb_changed, wb_note, workbook = pull_workbook(args.dry_run, stage)
-        push_workbook(args.dry_run, workbook)
+        push_workbook(args.dry_run, workbook, drv)
         if args.commit_workbook:
             commit_workbook(args.dry_run)
 
@@ -444,7 +606,8 @@ def main():
             print("\nDone.")
             return 0
 
-        new = sync_recordings(data_root, args.dry_run)
+        new = (unscored_recordings(data_root) if _raw_is_mount(data_root, drv)
+               else sync_recordings(data_root, args.dry_run, drv))
         gaps = check_demographics(new, workbook) if new else {}
 
         header("Summary")
@@ -470,7 +633,7 @@ def main():
 
         if do_qc:
             xlsx = run_qc(args.date, args.data_root, args.dry_run)
-            push_qc(xlsx, args.dry_run)
+            push_qc(xlsx, args.dry_run, drv)
 
         # A workbook pull changes the LABELS of already-built datasets, so
         # refresh them even when QC was skipped or blocked -- the two are

@@ -10,11 +10,12 @@ lives separately in `../../synapse`. Run everything from inside this directory
 ## Data location (relocatable)
 
 By default the `raw/` and generated `processed/` trees live under this
-directory. They can be moved elsewhere (e.g. the lab server
-`ub-polar:/data1/anarghya/synapse-data`, or an SSHFS mount of it) without
-editing code — point the tooling at the base dir. The published copy of `data/`
-
-+ `processed/` lives at `/data1/anarghya/synapse-data`.
+directory. They can be moved elsewhere without editing code — point the tooling
+at the base dir. Since 2026-10-08 the shared base is the **Drive `PC/` folder**
+(raw = its `Control/` + `Experimental/`, outputs = `PC/processed/`), used through
+the Google Drive for Desktop mount; `ub-polar:/data1/anarghya/synapse-data` holds
+an older snapshot in the `raw/` + `processed/` layout. See
+[`docs/data_sync.md`](docs/data_sync.md).
 
 - **Env var (all entry points, incl. `run_quality.py` / `spotcheck.py`):**
   ```bash

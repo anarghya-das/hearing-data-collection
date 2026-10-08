@@ -153,7 +153,7 @@ def main(cfg: DictConfig) -> None:
     # Base for the relocatable data/outputs trees (assets stay repo-relative).
     base = qpaths.resolve_base(cfg.paths.get("root"))
     data_root = (cfg.paths.get("data_root") or os.environ.get("SYNAPSE_DATA_ROOT")
-                 or os.path.join(base, "data"))
+                 or inventory.raw_root(base))
 
     montage_abs = os.path.join(REPO, cfg.paths.montage)
     _patch_epoching(montage_abs)

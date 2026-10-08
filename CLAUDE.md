@@ -10,9 +10,12 @@ data-collection experiment (repo root) and the QC/dataset-building pipelines
 `git subtree` with its history preserved). `processing/` has its own README,
 requirements, Hydra `conf/` and `docs/`; run its pipelines FROM INSIDE
 `processing/` (`cd processing && python -m pipelines.build_dataset ...`).
-The data lives on the lab server, pointed at via `$SYNAPSE_DATA_BASE` — a base
-holding `raw/` (recordings) and `processed/` (everything generated, numbered by
-pipeline step: `qc` -> `paired` -> `dataset`). Layout and the reserved
+The data lives in the Drive `PC/` folder (since 2026-10-08; the lab server's
+`/data1/anarghya/synapse-data` is now an unsynced snapshot), pointed at via
+`$SYNAPSE_DATA_BASE` — a base holding the recordings (`Control/` +
+`Experimental/` on Drive, `raw/{control,experimental}` on the server) and
+`processed/` (everything generated, numbered by pipeline step: `qc` -> `paired`
+-> `dataset`). Layout and the reserved
 `eeg`/`video` slots for pupillometry: `processing/README.md` and
 `processed/README.md` in the data tree. The
 analysis/paper repo is still separate: `../synapse` (a sibling of THIS repo's
@@ -25,7 +28,9 @@ root; configured as an absolute path in `processing/conf/config.yaml`
 server's `data/` tree is current.** The coordinator uploads recordings to Google
 Drive and maintains the clinical workbook on Box; both are reachable via the
 configured `rclone` remotes (`gdrive:` / `box:`), and both MUST be addressed by
-folder id, not path.
+folder id, not path. On a workstation with Google Drive for Desktop, Drive can
+instead go through the mount (`--drive-mount` / `$SYNAPSE_DRIVE_MOUNT`, checked
+against the folder id via the client's xattr); Box always needs rclone.
 
 `processing/scripts/sync_study_data.py` does the whole chain (workbook pull ->
 mirror to Drive -> download new recordings -> demographics gate -> QC -> publish

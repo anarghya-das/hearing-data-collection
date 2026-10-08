@@ -22,6 +22,56 @@ python -m scripts.sync_study_data --dry-run    # always start here
 python -m scripts.sync_study_data              # full run
 ```
 
+### On a workstation with Google Drive for Desktop: Drive `PC/` IS the data base
+
+Since 2026-10-08 the data base is the Drive `PC/` folder itself. The
+coordinator's `Control/` + `Experimental/` are the raw tree, and `processed/`
+sits beside them (uploaded from `ub-polar:/data1/anarghya/synapse-data/processed`).
+Everything the pipelines write lands in Drive and syncs. Point the tooling at the
+mount:
+
+```bash
+export SYNAPSE_DRIVE_MOUNT=~/"Google Drive/My Drive/PC-Synapse AudioSight/Participant Data"
+export SYNAPSE_DATA_BASE="$SYNAPSE_DRIVE_MOUNT/PC"     # raw = PC/ itself, outputs = PC/processed/
+python -m scripts.sync_study_data --dry-run    # prints "drive: mount ..." when active
+```
+
+`$SYNAPSE_DRIVE_MOUNT` is the **`Participant Data`** folder (the upload root),
+not `PC/`. Box still needs the `box:` rclone remote (it has no mount).
+`inventory.raw_root` recognizes the layout: a base with no `raw/` but with
+cohort folders is its own raw tree, and cohort folders match case-insensitively
+(`Control` here, `control` on the server). With raw on the mount, stage 3 has
+nothing to download, so "new" means **not yet in `processed/qc/quality_results.xlsx`**.
+
+- **The server copy is now a snapshot.** Nothing syncs `/data1/anarghya/synapse-data`
+  with Drive. To work on the server, pull first (`rclone copy gdrive:PC/processed
+  /data1/anarghya/synapse-data/processed --drive-root-folder-id $DRIVE_ROOT`) and
+  push back after. Never let both machines write `processed/` at the same time.
+- **Make `PC/` available offline** (Finder: right-click > Make available offline).
+  Otherwise every pipeline read streams from the network, and the client can
+  evict files it has cached.
+- **Drive cannot hold symlinks.** `dataset/eeg_only/cohort_20260828_43` was 43
+  absolute symlinks into `zero_mask_20260904` plus a pre-migration
+  `clinical.csv`; on Drive it holds only that csv. Use `zero_mask_20260904`.
+- **Old manifests record `/data1/...` paths** (`root`, `data_root`). They are
+  provenance only; no code reads them back.
+
+- **The path is checked by id.** The script reads the `com.google.drivefs.item-id#S`
+  xattr Drive for Desktop puts on the folder and refuses anything that isn't
+  `DRIVE_ROOT_ID`, so a moved or renamed shortcut can't point it at the wrong tree.
+- **Downloads are network-bound.** In streaming mode, reading a file is what
+  fetches it, so pulling a subject (~300-500 MB) runs at network speed. An
+  interrupted copy deletes the half-copied subject folder, so the next run
+  fetches it again rather than treating it as present.
+- **Uploads are queued, not done.** Stages 2 and 6 write into the mount, and the
+  client syncs them in the background. Check that Drive for Desktop shows no sync
+  errors, especially if the mounted account isn't an editor on `PC/`.
+  **Each upload replaces the Drive file**: the client creates a new file (new
+  id) and trashes the old one, so the previous version lives only in the trash
+  (~30 days) and links by Drive id break. Nothing links to them today: the
+  `PC_excel Link` doc points at the Box share URL. `rclone copyto` via `gdrive:`
+  updates in place and keeps revisions, if that ever matters.
+
 ## The steps
 
 | # | Step | Script / command | Notes |
@@ -123,7 +173,7 @@ every copy, so mtime always looks new.
 
 **The Drive-connector MCP tools cannot do this.** `get_file_metadata` on a folder
 id works, but `search_files` with `parentId = '<id>'` returns empty for folders
-owned by someone else. Use rclone. (`gws`, which
+owned by someone else. Use rclone or the Drive for Desktop mount. (`gws`, which
 `scripts/download_drive_folder.py` shells out to, is not installed.)
 
 **`quality_results.xlsx` is a single always-current file**, on Drive and locally
