@@ -85,7 +85,9 @@ are in `processing/README.md`; do not restate them here.
   name does NOT say so — use `qc_core.detect_devices`.
 - **Per-participant resolution quirks belong in `synapse_qc/inventory.py`**, in
   one place: `-old` sessions skipped unless they are the only one (CTRL01/02/03),
-  EXP44's stream empty, EXP26/CTRL03 have no EEG stream.
+  EXP44's stream empty, EXP26/CTRL03 have no EEG stream, CTRL21 pinned to its
+  re-test `sub-800412` (`PREFERRED_SESSION`: the workbook's New PC ID, whose
+  superseded session was never renamed `-old`).
 - **The clinical loader fails loudly on misaligned questionnaire rows** (GAD vs
   `Severity Data Sum`; it caught CTRL06-09). Fix such rows on Box, not in code;
   see `processing/docs/data_sync.md` "Workbook layout drift".

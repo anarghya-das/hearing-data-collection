@@ -16,6 +16,10 @@ in it (capitalized, next to ``processed/``)::
 
 Non-obvious conventions handled here (verified against the actual data, not
 assumed):
+  * The workbook's Demographics ``New PC ID`` names a participant's CURRENT
+    session. Normally the superseded one is renamed ``-old`` on Drive
+    (EXP01/03/04), so the ranking finds it unaided; where it was not, the
+    session is pinned in :data:`PREFERRED_SESSION` (CTRL21).
   * ``-old`` / ``_old`` sub-folders are re-done/abandoned sessions. Skip them
     when a current folder exists -- BUT CTRL01/02/03 have *only* an ``-old``
     folder, so it is used as a last resort (flagged ``old_only``).
@@ -107,6 +111,14 @@ class Participant:
     note: str = ""           # resolution note (e.g. why a folder was picked)
 
 
+# Sessions the workbook's 'New PC ID' designates as current, for participants
+# whose superseded session was NOT renamed '-old' (so the ranking alone would
+# pick it). Keep this in step with Demographics 'New PC ID'.
+PREFERRED_SESSION = {
+    "CTRL21": "sub-800412",   # re-test 2026-09-18; first session sub-307951
+}
+
+
 def _is_old(name):
     n = name.lower()
     return "-old" in n or "_old" in n
@@ -148,7 +160,9 @@ def resolve_participant(pid, group, folder):
             continue
         old = _is_old(d)
         neur = _is_neurable(d)
-        rank = (0 if not old else 1, 0 if not neur else 1)  # lower = better
+        pinned = d == PREFERRED_SESSION.get(pid)
+        rank = (0 if pinned else 1, 0 if not old else 1,
+                0 if not neur else 1)  # lower = better
         candidates.append((rank, d, sub_path, xdf, old, neur))
 
     p.all_xdfs = [c[3] for c in candidates]
@@ -172,7 +186,8 @@ def resolve_participant(pid, group, folder):
     if neur:
         notes.append("Neurable headset (12ch)")
     if len(candidates) > 1:
-        notes.append(f"{len(candidates)} sessions; picked '{d}'")
+        why = " (workbook New PC ID)" if d == PREFERRED_SESSION.get(pid) else ""
+        notes.append(f"{len(candidates)} sessions; picked '{d}'{why}")
     p.note = "; ".join(notes)
     return p
 
